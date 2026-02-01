@@ -1,0 +1,138 @@
+name: 798x-UBOOT
+
+on:
+  workflow_dispatch:
+    inputs:
+      prerelease:
+        description: '是否发布为预发布版本 (Pre-release)'
+        required: false
+        type: boolean
+        default: false
+      device_size:
+        description: '设备容量: 128 或 256 (MB)'
+        required: true
+        type: choice
+        default: '128'
+        options:
+          - '128'
+          - '256'
+      multi_layout:
+        description: '是否编译多分区版本 (Multi-layout)'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+  WRT_TARGET: MTK-798x
+  WRT_REPO: https://github.com/weekdaycare/bl-mt798x-dhcpd
+  WRT_BRANCH: master
+  PRERELEASE: ${{ github.event.inputs.prerelease }}
+
+permissions: write-all
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Projects
+        uses: actions/checkout@main
+
+      - name: ⚙️ Initialization Environment
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo -E apt -yqq purge firefox
+          sudo -E apt -yqq update
+          sudo -E apt -yqq full-upgrade
+          sudo -E apt -yqq autoremove --purge
+          sudo -E apt -yqq autoclean
+          sudo -E apt -yqq clean
+          sudo -E apt -yqq install dos2unix bison build-essential device-tree-compiler flex gcc-aarch64-linux-gnu libssl-dev qemu-user-static
+          sudo -E systemctl daemon-reload
+          sudo -E timedatectl set-timezone "Asia/Shanghai"
+
+          sudo mkdir -p /mnt/build_wrt
+          sudo chown $USER:$USER /mnt/build_wrt
+          sudo ln -s /mnt/build_wrt $GITHUB_WORKSPACE/wrt
+
+      - name: ⚙️ Initialization Values
+        run: |
+          echo "WRT_DATE=$(TZ=UTC-8 date +"%y.%m.%d")" >> $GITHUB_ENV
+          # Set device and multi-layout from workflow inputs
+          echo "WRT_DEVICE=${{ github.event.inputs.device_size }}" >> $GITHUB_ENV
+          if [ "${{ github.event.inputs.multi_layout }}" = "true" ]; then echo "WRT_MULTI=1" >> $GITHUB_ENV; else echo "WRT_MULTI=0" >> $GITHUB_ENV; fi
+
+      - name: ⬇️ Clone Code
+        run: |
+          git clone --depth=1 --single-branch --branch $WRT_BRANCH $WRT_REPO ./wrt/
+
+      - name: 🛠️ Compile Firmware
+        run: |
+          cd ./wrt/
+          # Choose board based on selected device size
+          if [ "${WRT_DEVICE}" = "256" ]; then BOARD=cudy_tr3000-v1-256mb; else BOARD=cudy_tr3000-v1; fi
+          # MULTI_LAYOUT is set to 1 when multi-layout selected, otherwise 0
+          SOC=mt7981 BOARD=$BOARD VERSION=2025 MULTI_LAYOUT=$WRT_MULTI ./build.sh
+
+      - name: 📦 Package Firmware
+        run: |
+          cd ./wrt/ && mkdir ./upload/
+
+          for FILE in $(find ./output/ -type f -iname "*.*") ; do
+            EXT=$(basename $FILE | cut -d '.' -f 2-)
+            NAME=$(basename $FILE | cut -d '.' -f 1)
+            NEW_FILE="$NAME"_"$WRT_DATE"."$EXT"
+            mv -f $FILE ./upload/$NEW_FILE
+          done
+
+      - name: 📌 Generate release tag
+        id: tag
+        run: |
+          DEVICE="${{ github.event.inputs.device_size }}"
+          MULTI_LAYOUT_FLAG="${{ github.event.inputs.multi_layout }}"
+          if [ "$DEVICE" = "256" ]; then DEVICE_NAME="256M"; else DEVICE_NAME="128M"; fi
+          if [ "$MULTI_LAYOUT_FLAG" = "true" ]; then ML_FLAG="Yes"; ML_SHORT="multi"; else ML_FLAG="No"; ML_SHORT="single"; fi
+          FIRMWARE_NAME="uboot-${DEVICE_NAME}-${ML_SHORT}"
+          BUILD_TIME=$(date +"%Y%m%d-%H%M")
+          RELEASE_TAG="${FIRMWARE_NAME}-${BUILD_TIME}"
+          echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+
+          # 生成 release 信息
+          cat > release.txt << EOF
+          ## 📦 Uboot Firmware Release
+
+          **🏷️ Release:** $RELEASE_TAG
+          **📦 Repo:** $WRT_REPO
+          **🌿 Branch:** $WRT_BRANCH
+          **📱 ATF:** atf-20250711
+          **📱 MTK:** uboot-mtk-20250711
+          **📱 Device:** $DEVICE_NAME
+          **🔀 Multi-layout:** $ML_FLAG
+          **📅 Build Date:** $(date +"%Y-%m-%d %H:%M:%S")
+
+          ## 📥 Download
+
+          Download the firmware files from the assets below.
+
+          ## 🚧 Notice
+
+          该固件为 DHCP uboot
+
+          ---
+
+          Built with ❤️ using [GitHub Actions](https://github.com/features/actions)
+          EOF
+
+          echo "status=success" >> $GITHUB_OUTPUT
+
+      - name: 📤 Upload firmware to release
+        uses: softprops/action-gh-release@v2
+        if: steps.tag.outputs.status == 'success' && !cancelled()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.tag.outputs.release_tag }}
+          body_path: release.txt
+          prerelease: ${{ env.PRERELEASE == 'true' }}
+          files: ./wrt/upload/*.bin
