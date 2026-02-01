@@ -21,12 +21,17 @@ on:
         required: false
         type: boolean
         default: false
+      branch:
+        description: '选择分支进行编译'
+        required: false
+        type: string
+        default: 'master'
 
 env:
   GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
   WRT_TARGET: MTK-798x
   WRT_REPO: https://github.com/weekdaycare/bl-mt798x-dhcpd
-  WRT_BRANCH: master
+  WRT_BRANCH: ${{ github.event.inputs.branch }}
   PRERELEASE: ${{ github.event.inputs.prerelease }}
 
 permissions: write-all
