@@ -21,6 +21,26 @@
 		system_led = "red:power";
 	};
 
+	mtd-layout {
+		layout@0 {
+			label = "default";
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),256k(bdinfo),2048k(fip),65536k(ubi)";
+		};
+
+		layout@1 {
+			label = "112m";
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),256k(bdinfo),2048k(fip),114688k(ubi)";
+		};
+
+		layout@2 {
+			label = "122m";
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),256k(bdinfo),2048k(fip),125184k(ubi)";
+		};
+	};
+
 	gpio-keys {
 		compatible = "gpio-keys";
 
