@@ -165,14 +165,18 @@ jobs:
                 -e '/^config[[:space:]]+MTK_DHCPD_USE_CONFIG_IP$/,/^config[[:space:]]+/ s/^\tdefault[[:space:]]+y$/\tdefault n/' \
                 "$f"
               echo "Patched: $f"
-              count=$((count+1))
             fi
           done
 
-          for k in uboot-mtk-*/net/Kconfig; do
-            if [ -f "$k" ]; then
-              sed -i -E 's/^(\s*config\s+MTK_DHCPD_USE_CONFIG_IP\b[\s\S]*?^\s*default\s+)y/\1n/m' "$k" || true
-              echo "Patched: $k (CONFIG_MTK_DHCPD_USE_CONFIG_IP default n)"
+          # replace #define DHCPD_DEFAULT_IP_STR "xxx" with the custom IP, keeping the quotes
+          for f in uboot-mtk-*/net/mtk_dhcpd.c; do
+            if [ -f "$f" ]; then
+              sed -i -E "s~(#define[[:space:]]+DHCPD_DEFAULT_IP_STR[[:space:]]+\")[0-9.]+(\")~\1${CUSTOM_IP}\2~" "$f"
+              echo "Patched default IP in: $f"
+              grep -E '#define[[:space:]]+DHCPD_DEFAULT_IP_STR' "$f"
+              count=$((count+1))
+            else
+              echo "Warning: Can't find expected file for DHCPD IP patch: $f"
             fi
           done
 

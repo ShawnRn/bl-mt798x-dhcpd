@@ -21,6 +21,10 @@ obj-$(CONFIG_WEBUI_FAILSAFE_BACKUP) += backup.o
 FILE_backup.o := backup.html
 FSPATH_backup.o := backup.html
 
+obj-$(CONFIG_WEBUI_FAILSAFE_FLASH) += flash.o
+FILE_flash.o := flash.html
+FSPATH_flash.o := flash.html
+
 obj-y += fail.o
 FILE_fail.o := fail.html
 FSPATH_fail.o := fail.html

@@ -516,3 +516,331 @@ function envRestoreOld() {
         })
         .catch(function (e) { setStatus('Error: ' + (e && e.message ? e.message : String(e))); });
 }
+
+function parseUserLenOld(n) {
+    var t, i, r;
+    if (!n) return null;
+    if (n = String(n).trim(), n === "") return null;
+    t = /^\s*(0x[0-9a-fA-F]+|\d+)\s*([a-zA-Z]*)\s*$/.exec(n);
+    if (!t) return null;
+    i = t[1].toLowerCase().indexOf("0x") === 0 ? parseInt(t[1], 16) : parseInt(t[1], 10);
+    if (!isFinite(i) || i < 0) return null;
+    r = (t[2] || "").toLowerCase();
+    return r === "" ? i : r === "k" || r === "kb" || r === "kib" ? i * 1024 : null
+}
+
+function flashExtractBytesOld(text) {
+    var bytes = [];
+    if (!text) return bytes;
+    var m = text.match(/[0-9a-fA-F]{2}/g);
+    if (!m) return bytes;
+    for (var i = 0; i < m.length; i++) bytes.push(parseInt(m[i], 16));
+    return bytes;
+}
+
+function flashFormatHexLinesOld(bytes) {
+    var out = [];
+    for (var i = 0; i < bytes.length; i++) {
+        if (i && i % 16 === 0) out.push("\n");
+        out.push((bytes[i] < 16 ? "0" : "") + bytes[i].toString(16).toUpperCase());
+        if (i % 16 !== 15 && i !== bytes.length - 1) out.push(" ");
+    }
+    return out.join("");
+}
+
+function flashFormatDataOld() {
+    var data = document.getElementById('flash_data');
+    if (!data) return;
+    if (!confirm('Format hex data now? This will reflow and trim invalid characters.')) return;
+    var bytes = flashExtractBytesOld(data.value || "");
+    data.value = flashFormatHexLinesOld(bytes);
+    setFlashStatusOld('Formatted.');
+}
+
+function flashFindLastBeforeOld(str, sub, limit) {
+    var idx = -1, cur = str.indexOf(sub);
+    while (cur !== -1 && cur < limit) {
+        idx = cur;
+        cur = str.indexOf(sub, cur + 1)
+    }
+    return idx
+}
+
+function flashParseBackupFilenameOld(name) {
+    if (!name) return null;
+    var rangeIdx = name.indexOf("_0x"), dashIdx, startStr, endStr, start, end;
+    if (rangeIdx < 0) return null;
+    dashIdx = name.indexOf("-0x", rangeIdx);
+    if (dashIdx < 0) return null;
+    startStr = name.slice(rangeIdx + 1, dashIdx);
+    endStr = name.slice(dashIdx + 1);
+    start = /^0x[0-9a-fA-F]+/.exec(startStr);
+    end = /^0x[0-9a-fA-F]+/.exec(endStr);
+    if (!start || !end) return null;
+    start = parseInt(start[0], 16);
+    end = parseInt(end[0], 16);
+    if (!isFinite(start) || !isFinite(end) || end <= start) return null;
+    var mtdIdx = flashFindLastBeforeOld(name, "_mtd_", rangeIdx);
+    var mmcIdx = flashFindLastBeforeOld(name, "_mmc_", rangeIdx);
+    var stypeIdx = mtdIdx >= 0 && mmcIdx >= 0 ? (mtdIdx > mmcIdx ? mtdIdx : mmcIdx) : (mtdIdx >= 0 ? mtdIdx : mmcIdx);
+    if (stypeIdx < 0) return null;
+    var storage = stypeIdx === mtdIdx ? "mtd" : "mmc";
+    var seg = name.slice(stypeIdx + 5, rangeIdx);
+    if (!seg) return null;
+    var parts = seg.split("_");
+    var target = parts[parts.length - 1];
+    if (!target) return null;
+    return { storage: storage, target: target, start: start, end: end }
+}
+
+function flashSelectTargetOld(val) {
+    var sel = document.getElementById('flash_target'), i;
+    if (!sel) return false;
+    for (i = 0; i < sel.options.length; i++) if (sel.options[i].value === val) {
+        sel.selectedIndex = i;
+        return true;
+    }
+    return false;
+}
+
+function flashInitOld() {
+    getversion();
+
+    var target = document.getElementById('flash_target');
+    var info = document.getElementById('flash_info');
+    var backup = document.getElementById('flash_backup');
+    var restoreInfo = document.getElementById('flash_restore_info');
+
+    if (backup) {
+        backup.onchange = function () {
+            var f = backup.files && backup.files.length ? backup.files[0] : null;
+            var d = f ? flashParseBackupFilenameOld(f.name) : null;
+            if (!d) {
+                if (restoreInfo) restoreInfo.innerHTML = 'No valid backup filename detected';
+                return;
+            }
+            if (restoreInfo) restoreInfo.innerHTML = d.storage + ':' + d.target + ' 0x' + d.start.toString(16) + '-0x' + d.end.toString(16);
+            flashSelectTargetOld(d.storage + ':' + d.target);
+            var s = document.getElementById('flash_start');
+            var e = document.getElementById('flash_end');
+            s && (s.value = '0x' + d.start.toString(16));
+            e && (e.value = '0x' + d.end.toString(16));
+        };
+    }
+
+    ajax({
+        url: '/backup/info',
+        done: function (txt) {
+            var data;
+            try { data = JSON.parse(txt); } catch (e) { setFlashStatusOld('backup info parse failed'); return; }
+
+            if (info) {
+                var mmc = data.mmc && data.mmc.present ? ('MMC: ' + (data.mmc.vendor || '') + ' ' + (data.mmc.product || '')) : 'MMC: not present';
+                var mtd = data.mtd && data.mtd.present ? ('MTD: ' + (data.mtd.model || '')) : 'MTD: not present';
+                info.innerHTML = mmc + ' | ' + mtd;
+            }
+
+            if (target) {
+                target.options.length = 0;
+                var opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = '-- select --';
+                target.appendChild(opt);
+
+                if (data.mmc && data.mmc.present) {
+                    var raw = document.createElement('option');
+                    raw.value = 'mmc:raw';
+                    raw.textContent = '[MMC] raw';
+                    target.appendChild(raw);
+
+                    if (data.mmc.parts && data.mmc.parts.length) {
+                        data.mmc.parts.forEach(function (p) {
+                            if (!p || !p.name) return;
+                            var o = document.createElement('option');
+                            o.value = 'mmc:' + p.name;
+                            o.textContent = '[MMC] ' + p.name + (p.size ? ' (' + bytesToHuman(p.size) + ')' : '');
+                            target.appendChild(o);
+                        });
+                    }
+                }
+
+                if (data.mtd && data.mtd.present && data.mtd.parts && data.mtd.parts.length) {
+                    data.mtd.parts.forEach(function (p) {
+                        if (!p || !p.name) return;
+                        var o = document.createElement('option');
+                        o.value = 'mtd:' + p.name;
+                        o.textContent = '[MTD] ' + p.name + (p.size ? ' (' + bytesToHuman(p.size) + ')' : '');
+                        target.appendChild(o);
+                    });
+                }
+
+                if (target.options.length > 1) target.selectedIndex = 1;
+            }
+        }
+    });
+}
+
+function setFlashStatusOld(msg) {
+    var el = document.getElementById('flash_status');
+    if (el) el.innerHTML = msg || '';
+}
+
+async function flashReadOld() {
+    var target = document.getElementById('flash_target');
+    var start = document.getElementById('flash_start');
+    var end = document.getElementById('flash_end');
+    var data = document.getElementById('flash_data');
+    if (!target || !target.value) { alert('Please select a target'); return; }
+    if (!start || !end || !start.value || !end.value) { alert('Please input valid start/end'); return; }
+    try {
+        setFlashStatusOld('Reading...');
+        var fd = new FormData();
+        fd.append('op', 'read');
+        fd.append('storage', 'auto');
+        fd.append('target', target.value);
+        fd.append('start', start.value);
+        fd.append('end', end.value);
+        var r = await fetch('/flash/read', { method: 'POST', body: fd });
+        var txt = await r.text();
+        if (!r.ok) { setFlashStatusOld('HTTP error: ' + r.status + (txt ? ': ' + txt : '')); return; }
+        var j;
+        try { j = JSON.parse(txt); } catch (e) { setFlashStatusOld('Parse error'); return; }
+        if (!j || !j.ok) { setFlashStatusOld('Error: ' + (j && j.error ? j.error : '')); return; }
+        if (data) data.value = j.data || '';
+        setFlashStatusOld('Done.');
+    } catch (e) {
+        setFlashStatusOld('Error: ' + (e && e.message ? e.message : String(e)));
+    }
+}
+
+async function flashWriteOld() {
+    var target = document.getElementById('flash_target');
+    var start = document.getElementById('flash_start');
+    var data = document.getElementById('flash_data');
+    if (!target || !target.value) { alert('Please select a target'); return; }
+    if (!start || !start.value) { alert('Please input valid start'); return; }
+    if (!data || !data.value || !data.value.trim()) { alert('Please input hex data'); return; }
+    if (!confirm('Write data to flash now?')) return;
+    try {
+        setFlashStatusOld('Writing...');
+        var fd = new FormData();
+        fd.append('op', 'write');
+        fd.append('storage', 'auto');
+        fd.append('target', target.value);
+        fd.append('start', start.value);
+        fd.append('data', data.value);
+        var r = await fetch('/flash/write', { method: 'POST', body: fd });
+        var txt = await r.text();
+        if (!r.ok) { setFlashStatusOld('HTTP error: ' + r.status + (txt ? ': ' + txt : '')); return; }
+        var j;
+        try { j = JSON.parse(txt); } catch (e) { setFlashStatusOld('Parse error'); return; }
+        if (!j || !j.ok) { setFlashStatusOld('Error: ' + (j && j.error ? j.error : '')); return; }
+        setFlashStatusOld('Done.');
+    } catch (e) {
+        setFlashStatusOld('Error: ' + (e && e.message ? e.message : String(e)));
+    }
+}
+
+async function flashRestoreOld() {
+    var target = document.getElementById('flash_target');
+    var start = document.getElementById('flash_start');
+    var end = document.getElementById('flash_end');
+    var backup = document.getElementById('flash_backup');
+    if (!backup || !backup.files || !backup.files.length) { alert('Please select a backup file'); return; }
+    if (!confirm('Restore backup to flash now?')) return;
+    try {
+        var file = backup.files[0];
+        var totalSize = file ? file.size : 0;
+        var baseStart = start ? parseUserLenOld(start.value) : null;
+        var baseEnd = end ? parseUserLenOld(end.value) : null;
+
+        if ((baseStart === null || baseEnd === null) && file && file.name) {
+            var parsed = flashParseBackupFilenameOld(file.name);
+            if (parsed) {
+                baseStart = parsed.start;
+                baseEnd = parsed.end;
+                if (target && !target.value && parsed.storage && parsed.target)
+                    flashSelectTargetOld(parsed.storage + ':' + parsed.target);
+                start && (start.value = '0x' + baseStart.toString(16));
+                end && (end.value = '0x' + baseEnd.toString(16));
+            }
+        }
+
+        if (target && !target.value) { alert('Please select a target'); return; }
+        if (baseStart === null || baseEnd === null || baseEnd <= baseStart) {
+            setFlashStatusOld('Please input valid start/end');
+            return;
+        }
+        if ((baseEnd - baseStart) !== totalSize) {
+            setFlashStatusOld('Please input valid start/end');
+            return;
+        }
+
+        var chunkSize = 4 * 1024 * 1024;
+        var useChunked = totalSize > chunkSize;
+
+        function toHex(n) { return '0x' + n.toString(16); }
+
+        function sendChunk(blob, chunkOffset, chunkEnd, totalSize, baseStart) {
+            return new Promise(function (resolve, reject) {
+                var fd = new FormData();
+                fd.append('op', 'restore');
+                fd.append('backup', blob, 'restore_chunk.bin');
+                target && target.value && fd.append('target', target.value);
+                fd.append('start', toHex(baseStart + chunkOffset));
+                fd.append('end', toHex(baseStart + chunkEnd));
+                fd.append('storage', 'auto');
+
+                var xhr = new XMLHttpRequest();
+                xhr.upload.onprogress = function (evt) {
+                    if (!evt || !evt.lengthComputable) return;
+                    var pct = Math.floor((chunkOffset + evt.loaded) / totalSize * 100);
+                    setFlashStatusOld('Uploading... ' + pct + '%');
+                };
+                xhr.upload.onload = function () {
+                    setFlashStatusOld('Restoring...');
+                };
+                xhr.onreadystatechange = function () {
+                    if (xhr.readyState !== 4) return;
+                    if (xhr.status !== 200) {
+                        setFlashStatusOld('HTTP error: ' + xhr.status + (xhr.responseText ? ': ' + xhr.responseText : ''));
+                        reject(new Error('http'));
+                        return;
+                    }
+                    var j;
+                    try { j = JSON.parse(xhr.responseText); } catch (e) {
+                        setFlashStatusOld('Parse error');
+                        reject(e);
+                        return;
+                    }
+                    if (!j || !j.ok) {
+                        setFlashStatusOld('Error: ' + (j && j.error ? j.error : ''));
+                        reject(new Error('bad'));
+                        return;
+                    }
+                    resolve();
+                };
+                xhr.open('POST', '/flash/restore');
+                xhr.send(fd);
+            });
+        }
+
+        setFlashStatusOld('Uploading... 0%');
+
+        if (!useChunked) {
+            await sendChunk(file, 0, totalSize, totalSize, baseStart);
+        } else {
+            var offset = 0;
+            while (offset < totalSize) {
+                var next = Math.min(offset + chunkSize, totalSize);
+                var blob = file.slice(offset, next);
+                await sendChunk(blob, offset, next, totalSize, baseStart);
+                offset = next;
+            }
+        }
+
+        setFlashStatusOld('Done.');
+    } catch (e) {
+        setFlashStatusOld('Error: ' + (e && e.message ? e.message : String(e)));
+    }
+}

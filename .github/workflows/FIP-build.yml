@@ -28,11 +28,6 @@ on:
         required: true
         default: 'master'
         type: string
-      GPT_GEN:
-        description: 'Generate GPT table image'
-        required: false
-        default: false
-        type: boolean
       GEN_BL2:
         description: 'Generate BL2 binary(v22/23 ATF only)'
         required: false
@@ -286,7 +281,19 @@ jobs:
               -e '/^config[[:space:]]+MTK_DHCPD_USE_CONFIG_IP$/,/^config[[:space:]]+/ s/^\tdefault[[:space:]]+y$/\tdefault n/' \
               "$f"
             echo "Patched: $f"
+          fi
+        done
+
+        # 替换 mtk_dhcpd.c 文件中的默认 IP
+        for f in uboot-mtk-*/net/mtk_dhcpd.c; do
+          if [ -f "$f" ]; then
+            # 替换 #define DHCPD_DEFAULT_IP_STR "xxx"
+            sed -i -E "s~(#define[[:space:]]+DHCPD_DEFAULT_IP_STR[[:space:]]+\")[0-9.]+(\")~\1${CUSTOM_IP}\2~" "$f"
+            echo "Patched default IP in: $f"
+            grep -E '#define[[:space:]]+DHCPD_DEFAULT_IP_STR' "$f"
             count=$((count+1))
+          else
+            echo "Warning: 未找到 $f"
           fi
         done
 
@@ -460,15 +467,6 @@ jobs:
         
         echo "FILE_DATE=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_ENV
         echo "status=success" >> $GITHUB_OUTPUT
-    
-    - name: 编译 GPT
-      if: github.event.inputs.GPT_GEN == 'true' && !cancelled()
-      run: |
-        cd bl-mt798x-dhcpd
-        chmod +x ./generate_gpt.sh
-        ./generate_gpt.sh
-        echo "status=success" >> $GITHUB_OUTPUT
-        echo "GPT=1" >> $GITHUB_ENV
 
     - name: 查看磁盘使用情况
       if: (!cancelled())
@@ -567,11 +565,6 @@ jobs:
           fi
         else
           echo "- 保持默认网段192.168.1.1" >> release.txt
-        fi
-        if [ "${{ github.event.inputs.GPT_GEN }}" = "true" ]; then
-          echo "- 已生成GPT分区表镜像" >> release.txt
-        else
-          echo "- 未生成GPT分区表镜像" >> release.txt
         fi
         if [ "${{ github.event.inputs.MODEL }}" = "all" ]; then
           echo "- 已输出各版本机型列表文件（MODEL=all）" >> release.txt

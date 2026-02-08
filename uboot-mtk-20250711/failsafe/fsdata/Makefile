@@ -21,6 +21,10 @@ obj-$(CONFIG_WEBUI_FAILSAFE_BACKUP) += backup.o
 FILE_backup.o := backup.html
 FSPATH_backup.o := backup.html
 
+obj-$(CONFIG_WEBUI_FAILSAFE_FLASH) += flash.o
+FILE_flash.o := flash.html
+FSPATH_flash.o := flash.html
+
 obj-$(CONFIG_WEBUI_FAILSAFE_ENV) += env.o
 FILE_env.o := env.html
 FSPATH_env.o := env.html
@@ -48,6 +52,10 @@ FSPATH_index.o := index.html
 obj-y += initramfs.o
 FILE_initramfs.o := initramfs.html
 FSPATH_initramfs.o := initramfs.html
+
+obj-$(CONFIG_WEBUI_FAILSAFE_I18N) += i18n.o
+FILE_i18n.o := i18n.js
+FSPATH_i18n.o := i18n.js
 
 obj-y += main.o
 FILE_main.o := main.js
