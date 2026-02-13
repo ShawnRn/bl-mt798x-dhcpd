@@ -1,6 +1,11 @@
+# SPDX-License-Identifier: GPL-2.0
 #
-# This is free software, licensed under the MIT License.
-# See /LICENSE for more information.
+# Copyright (C) 2026 Yuzhii0718
+#
+# All rights reserved.
+#
+# This file is part of the project bl-mt798x-dhcpd
+# You may not use, copy, modify or distribute this file except in compliance with the license agreement.
 #
 name: GPT Build
 
@@ -22,6 +27,11 @@ on:
         description: 'Include template partition table'
         required: false
         default: false
+        type: boolean
+      pub_release:
+        description: 'Publish to GitHub Release'
+        required: false
+        default: 'true'
         type: boolean
 
 env:
@@ -51,6 +61,10 @@ jobs:
           sudo timedatectl set-timezone "$TZ"
           sudo mkdir -p /workdir
           sudo chown $USER:$GROUPS /workdir
+
+          if [ "${{ github.event.inputs.pub_release }}" = "false" ]; then
+            echo "UPLOAD_RELEASE=false" >> $GITHUB_ENV
+          fi
 
       - name: 下载源码
         working-directory: /workdir
@@ -130,21 +144,23 @@ jobs:
         run: |
           set -euo pipefail
           touch release.txt
-          echo "- 使用源码：${{ env.REPO_URL }}" >> release.txt
-          echo "- 使用分支：${{ env.REPO_BRANCH }}" >> release.txt
+
+          echo "- 提交来源: ${{ github.sha }}" >> release.txt
+          echo "- 使用源码: ${{ env.REPO_URL }}" >> release.txt
+          echo "- 使用分支: ${{ env.REPO_BRANCH }}" >> release.txt
           if [ "${{ github.event.inputs.GPT_TEMPLATE }}" = "true" ]; then
-            echo "- 已启用：编译模板分区表" >> release.txt
+            echo "- 已启用: 编译模板分区表" >> release.txt
           else
-            echo "- 未启用：编译模板分区表" >> release.txt
+            echo "- 未启用: 编译模板分区表" >> release.txt
           fi
-          echo "- 编译时间：${{ env.FILE_DATE }}" >> release.txt
+          echo "- 编译时间: ${{ env.FILE_DATE }}" >> release.txt
 
           echo "release_tag=${{ env.FILE_DATE }}-gpt-partition-table" >> $GITHUB_OUTPUT
           echo "status=success" >> $GITHUB_OUTPUT
 
       - name: 发布至Release
         uses: softprops/action-gh-release@v2.1.0
-        if: steps.tag.outputs.status == 'success' && !cancelled()
+        if: steps.tag.outputs.status == 'success' && !cancelled() && env.UPLOAD_RELEASE == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:

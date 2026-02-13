@@ -29,6 +29,7 @@ You can configure the features you need.
   - MTK_DHCPD_POOL_SIZE default 101
 - Failsafe Web UI style:
   - [x] WEBUI_FAILSAFE_UI_NEW
+    - [x] WEBUI_FAILSAFE_I18N
   - [ ] WEBUI_FAILSAFE_UI_OLD
 - [x] WEBUI_FAILSAFE_ADVANCED - Enable advanced features
   - [x] WEBUI_FAILSAFE_FACTORY - Enable factory (RF) update
@@ -50,12 +51,16 @@ sudo apt install gcc-aarch64-linux-gnu build-essential flex bison libssl-dev dev
 ```bash
 chmod +x build.sh
 SOC=mt7981 BOARD=sn_r1 VERSION=2025 ./build.sh
-SOC=mt7981 BOARD=cmcc_a10 VERSION=2022 MULTI_LAYOUT=1 ./build.sh
+SOC=mt7981 BOARD=cmcc_a10 VERSION=2025 MULTI_LAYOUT=1 ./build.sh
 ```
 
 - SOC=mt7981/mt7986
 - VERSION=2022/2023/2024/2025
-- MULTI_LAYOUT=1 (Optional, only for multi-layout devices, e.g. xiaomi-wr30u, redmi-ax6000)
+- MULTI_LAYOUT (default: 0. Optional, only for multi-layout devices, e.g. xiaomi-wr30u, redmi-ax6000)
+- FIXED_MTDPARTS (default: 1. Optional, if set to 0, for nand device, the mtdparts will be editiable, but it may cause some issues if you don't know what you are doing)
+
+> CAN'T ENABLE MULTI_LAYOUT=1 and FIXED_MTDPARTS=0 at the same time
+
 - Version differences:
 
 | Version | ATF | UBOOT |
@@ -72,7 +77,7 @@ Generated files will be in the `output`
 > install denpendencies
 
 ```bash
-sudo apt-get install python2-dev swig
+sudo apt-get install python2 python2-dev
 ```
 
 > run
@@ -95,8 +100,7 @@ Create a directory named `mt798x_gpt_bin` in the respository root directory, and
 Then run:
 
 ```bash
-chmod +x show_gpt.sh
-./show_gpt.sh
+SHOW=1 ./generate_gpt.sh
 ```
 
 Then it will display the GPT partition info of all GPT bin files in `mt798x_gpt_bin` directory, and output the results to `gpt_info.txt` in the `output_gpt` directory.
@@ -116,28 +120,50 @@ Then it will display the GPT partition info of all GPT bin files in `mt798x_gpt_
 
 ## FIT support
 
-This function is based on 1715173329's [bl-mt798x-oss](https://github.com/1715173329/bl-mt798x-oss/tree/fit-example)
-
-I have created a patch based on his work to support FIT images.
-
-Only a limited number of models are supported. If your device is not listed, you can try to add support yourself by following his work.
-
-***BUT NOT TESTED YET!***
-
-So, **you MUST test it yourself, and there is a risk of BRICKING your device!**
+**You MUST test it yourself, and there is a risk of BRICKING your device!**
 
 There are two ways to build:
 
-1. Apply patch and build Version 2022
+- Local Build
 
-    ```bash
-    git apply modify-patch/0002-uboot-2022-fit-merge-code-from-1715173329-to-support.patch
-    SOC=mt7981 BOARD=your_board VERSION=2022 ./build.sh
-    ```
+  ```bash
+  SOC=mt7981 BOARD=your_board VERSION=2025 MAINLINE=1 ./build.sh
+  ```
 
-2. Build via Actions
+- Use Action to build
 
-Open the repository's Actions tab, choose the "Build FIT BL2 and FIP" workflow, and run it.
+HOW to flash:
+
+1. Use failsafe WEB UI to backup*** **all your flash and partitions**, is very **important**!
+
+2. Update BL2 in the WEB UI to flash the preloader provided by OpenWrt/ImmortalWrt ubootmod firmware.
+
+3. Update U-Boot in the WEB UI to flash the **FIT version FIP**.
+
+4. Use Flash Editor in the WEB UI to erase the UBI partition(or use command line: `mtd erase ubi`).
+
+5. Try upgrade in firmware upgrade page with the OpenWrt/ImmortalWrt ubootmod firmware* **, if not work, try next step.
+
+6. Use failsafe WEB UI Initramfs to boot the OpenWrt/ImmortalWrt ubootmod Initramfs image.
+
+7. If the device can boot into OpenWrt/ImmortalWrt successfully, then you can try upgrade in firmware upgrade page with the OpenWrt/ImmortalWrt ubootmod firmware again.
+
+> *: If your device is a MMC device, you need upgrade GPT table which has production partition<br>
+> **: The OpenWrt/ImmortalWrt ubootmod firmware is a special firmware with FIT support, in this firmware, devicetree is loaded from the FIT image(bootargs = "root=/dev/fit0 rootwait"), and loaded from ubi_rootdisk. You'd better use a version after OpenWrt/ImmortalWrt 24.10.
+
+---
+
+## The best practices
+
+1. Use TTL tools to connect to the serial port, and use [MTK UARTBOOT](https://github.com/981213/mtk_uartboot/releases) to ramboot
+
+2. In Web UI, backup all your flash and partitions***, is very important!
+
+3. Update U-Boot in the WEB UI and upgrade firmware
+
+4. restore backup if something goes wrong
+
+> ***: If your device is a MMC device, back up all flash is not feasible. It depends on the size of the firmware, which is usually 200MB to 300MB.
 
 ---
 

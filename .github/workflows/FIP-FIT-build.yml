@@ -1,4 +1,13 @@
-name: UBoot-2022-FIT Build
+# SPDX-License-Identifier: GPL-2.0
+#
+# Copyright (C) 2026 Yuzhii0718
+#
+# All rights reserved.
+#
+# This file is part of the project bl-mt798x-dhcpd
+# You may not use, copy, modify or distribute this file except in compliance with the license agreement.
+#
+name: FIP-FIT-2025 Build
 
 on:
   workflow_dispatch:
@@ -8,16 +17,16 @@ on:
         required: true
         default: 'all'
         type: string
-      OC_BL2:
-        description: 'Build 1.6GHz BL2 by patch'
-        required: false
-        default: false
-        type: boolean
       CUSTOM_IP:
         description: 'Custom default IP for DHCPD (e.g. 192.168.31.1)'
         required: false
         default: 'false'
         type: string
+      pub_release:
+        description: 'Publish to GitHub Release'
+        required: false
+        default: 'true'
+        type: boolean
 
 env:
   TZ: Asia/Shanghai
@@ -47,31 +56,29 @@ jobs:
       - name: Generate build list
         id: list
         run: |
-          PATCH_FILE="modify-patch/0002-uboot-2022-fit-merge-code-from-1715173329-to-support.patch"
-          test -f "$PATCH_FILE"
-
-          # Extract defconfig filenames touched by the patch (unique, basename only).
-          # Expected diff line format: diff --git a/<path> b/<path>
-          CONFIG_LIST="$(
-            awk '/^diff --git a\// {print $4}' "$PATCH_FILE" \
-              | sed 's/^b\///' \
-              | awk -F '/' '/defconfig$/ {print $NF}' \
-              | sort -u
-          )"
-
-          if [ -z "$CONFIG_LIST" ]; then
-            echo "No *defconfig entries found in patch: $PATCH_FILE" >&2
-            exit 1
-          fi
-
           # Optional: build only one target when inputs.TARGET is provided as soc,board
           TARGET_RAW="${{ github.event.inputs.TARGET }}"
           TARGET_RAW="${TARGET_RAW:-all}"
           # Trim all whitespace so both "mt7981,cmcc_a10" and "mt7981, cmcc_a10" work.
           TARGET="$(echo "$TARGET_RAW" | tr -d '[:space:]')"
 
+          ATF_DIR="atf-20250711/configs"
+          UBOOT_DIR="uboot-mtk-20250711/configs-fit"
+
+          # Build paired defconfig list: must exist in BOTH trees.
+          CONFIG_LIST="$(
+            if [ -d "$ATF_DIR" ] && [ -d "$UBOOT_DIR" ]; then
+              # Find all *_defconfig in ATF, keep only those also present in U-Boot.
+              find "$ATF_DIR" -maxdepth 1 -type f -name '*_defconfig' -printf '%f\n' 2>/dev/null \
+                | while IFS= read -r def; do
+                    [ -z "$def" ] && continue
+                    [ -f "$UBOOT_DIR/$def" ] && echo "$def"
+                  done \
+                | sort -u
+            fi
+          )"
+
           if [ -n "$TARGET" ] && [ "$TARGET" != "all" ]; then
-            # format: soc,board -> soc_board_defconfig
             if ! echo "$TARGET" | grep -Eq '^[A-Za-z0-9._-]+,[A-Za-z0-9._-]+$'; then
               echo "Illegal TARGET: '$TARGET_RAW' (expected: soc,board). e.g. mt7981,cmcc_a10" >&2
               exit 1
@@ -81,17 +88,13 @@ jobs:
             BOARD="${TARGET#*,}"
             DEFCONFIG="${SOC}_${BOARD}_defconfig"
 
-            # Prefer validating against patch-derived list; otherwise validate existence in tree.
-            if echo "$CONFIG_LIST" | grep -Fxq "$DEFCONFIG"; then
-              echo "TARGET matched patch list: $DEFCONFIG"
-            else
-              if ! find uboot-mtk-* -path "*/configs/${DEFCONFIG}" -type f -print -quit | grep -q .; then
-                echo "TARGET defconfig not found: $DEFCONFIG" >&2
-                echo "Available defconfigs from patch list:" >&2
-                echo "$CONFIG_LIST" | sed 's/^/  - /' >&2
-                exit 1
-              fi
-              echo "TARGET found in tree (not in patch list): $DEFCONFIG"
+            # Must exist as a valid pair
+            if [ ! -f "$ATF_DIR/$DEFCONFIG" ] || [ ! -f "$UBOOT_DIR/$DEFCONFIG" ]; then
+              echo "TARGET defconfig pair not found:" >&2
+              echo "  missing: $ATF_DIR/$DEFCONFIG or $UBOOT_DIR/$DEFCONFIG" >&2
+              echo "Available paired defconfigs:" >&2
+              echo "$CONFIG_LIST" | sed 's/^/  - /' >&2
+              exit 1
             fi
 
             JSON_LIST="{\"runner\": [\"ubuntu-latest\"],\"list\": [\"${DEFCONFIG}\"]}"
@@ -100,7 +103,7 @@ jobs:
             exit 0
           fi
 
-          # Default: build all defconfigs extracted from patch.
+          # Default: build all paired defconfigs.
           CONFIGS="$(echo "$CONFIG_LIST" | awk '{printf "\"%s\",", $0}' | sed 's/,$//')"
           JSON_LIST="{\"runner\": [\"ubuntu-latest\"],\"list\": [$CONFIGS]}"
           echo "$JSON_LIST" | jq .
@@ -123,20 +126,11 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           sudo -E apt-get update
-          sudo -E apt-get install gcc-aarch64-linux-gnu build-essential flex bison libssl-dev device-tree-compiler
+          sudo -E apt-get install gcc-aarch64-linux-gnu build-essential flex bison libssl-dev device-tree-compiler tar
           sudo timedatectl set-timezone "$TZ"
 
       - name: Checkout source tree
         uses: actions/checkout@v4
-
-      - name: Apply required patches
-        run: |
-          git apply --verbose "modify-patch/0002-uboot-2022-fit-merge-code-from-1715173329-to-support.patch"
-
-      - name: Apply overclocking BL2 patch (1.6GHz)
-        if: ${{ inputs.OC_BL2 }}
-        run: |
-          git apply --verbose "modify-patch/0001-overclocking-mt7981-to-1.6GHz-by-modify-atf.patch"
 
       - name: Apply a special network segment to U-Boot DHCPD
         if: github.event.inputs.CUSTOM_IP != 'false' && !cancelled()
@@ -195,9 +189,8 @@ jobs:
           export SOC="${CONFIG%%_*}"
           BOARD="${CONFIG#*_}"
           export BOARD="${BOARD%_*}"
-          export VERSION="2022"
           mkdir -p "output"
-          SOC="$SOC" BOARD="$BOARD" VERSION="$VERSION" ./build.sh 2>&1 | tee "output/build.log"
+          SOC="$SOC" BOARD="$BOARD" VERSION=2025 MAINLINE=1 ./build.sh 2>&1 | tee "output/build-${SOC}-${BOARD}-2025.log"
           echo "ARTIFACT_NAME=$SOC-$BOARD" >> "$GITHUB_ENV"
 
       - name: Organize and rename outputs
@@ -205,13 +198,10 @@ jobs:
           set -euo pipefail
           SUFFIX="-FIT-${TIMESTAMP}"
 
-          if [ "${{ env.OC_BL2 }}" = "1" ]; then
-            for file in output/*; do
-              if [[ "$file" == *"mt7981"* && "$file" == *"bl2.bin"* ]]; then
-                mv "$file" "${file%.bin}_oc1.6GHz.bin"
-              fi
-            done
-          fi
+          export CONFIG="${{ matrix.list }}"
+          export SOC="${CONFIG%%_*}"
+          BOARD="${CONFIG#*_}"
+          export BOARD="${BOARD%_*}"
 
           shopt -s nullglob
           for f in output/*; do
@@ -226,20 +216,28 @@ jobs:
             fi
           done
 
+          logs=(output/build-*.log output/*-build-*.log)
+          if (( ${#logs[@]} )); then
+            tar -czf "output/build-logs_${TIMESTAMP}.tar.gz" "${logs[@]}"
+            rm -f "${logs[@]}"
+          fi
+
           # Re-generate sha256sums AFTER renaming; exclude sha256sums itself.
           (
             cd output
             find . -maxdepth 1 -type f ! -name 'sha256sums*' -print0 \
               | sort -z \
               | xargs -0 sha256sum \
-              > "sha256sums${SUFFIX}.txt"
+              > "sha256sums-${SOC}-${BOARD}${SUFFIX}.txt"
           )
 
       - name: Upload build outputs
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARTIFACT_NAME }}
-          path: output/*
+          path: |
+            output/*
+            !output/*bl2*
 
   release:
     name: Release firmware
@@ -259,12 +257,13 @@ jobs:
           set -euo pipefail
           touch release.txt
 
-          echo "- 构建目标（TARGET）：${{ github.event.inputs.TARGET }}" >> release.txt
+          echo "- 提交来源: ${{ github.sha }}" >> release.txt
+          echo "- 构建目标（TARGET）: ${{ github.event.inputs.TARGET }}" >> release.txt
 
           CUSTOM_IP="${{ github.event.inputs.CUSTOM_IP }}"
           if [ "$CUSTOM_IP" != "false" ] && [ -n "$CUSTOM_IP" ]; then
             if echo "$CUSTOM_IP"; then
-              echo "- 已应用特殊网段：$CUSTOM_IP" >> release.txt
+              echo "- 已应用特殊网段: $CUSTOM_IP" >> release.txt
             else
               echo "- 特殊网段输入无效（CUSTOM_IP=$CUSTOM_IP），已保持默认网段192.168.1.1" >> release.txt
             fi
@@ -272,19 +271,12 @@ jobs:
             echo "- 保持默认网段192.168.1.1" >> release.txt
           fi
 
-          if [ "${{ inputs.OC_BL2 }}" = "true" ]; then
-            echo "- 已应用1.6GHz BL2超频补丁" >> release.txt
-          else
-            echo "- 未应用1.6GHz BL2超频补丁" >> release.txt
-          fi
-
-          echo "FIT 代码来自[bl-mt798x-oss](https://github.com/1715173329/bl-mt798x-oss/tree/fit-example)，感谢原作者的贡献。" >> release.txt
-
           echo "TIMESTAMP=${{ needs.generate_list.outputs.timestamp }}" >> "$GITHUB_ENV"
           echo "RELEASE_TAG=FIT-dhcpd-${{ needs.generate_list.outputs.timestamp }}" >> "$GITHUB_ENV"
           echo "RELEASE_NAME=FIT-dhcpd-${{ needs.generate_list.outputs.timestamp }}" >> "$GITHUB_ENV"
 
       - name: Publish firmware to Release
+        if: github.event.inputs.pub_release == 'true' && !cancelled()
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}

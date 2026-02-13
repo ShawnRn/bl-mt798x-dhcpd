@@ -46,26 +46,40 @@ UBOOT_CFG_SOURCE="${SOC}_${BOARD}_defconfig"
 ATF_CFG="${ATF_CFG:-$ATF_CFG_SOURCE}"
 UBOOT_CFG="${UBOOT_CFG:-$UBOOT_CFG_SOURCE}"
 
-if grep -Eq "CONFIG_FLASH_DEVICE_EMMC=y|_BOOT_DEVICE_EMMC=y" $ATF_DIR/configs/$ATF_CFG ; then
-	# No fixed-mtdparts or multilayout for EMMC
+ATF_CFG_PATH="$ATF_DIR/configs/$ATF_CFG"
+UBOOT_CFG_PATH="$UBOOT_DIR/configs/$UBOOT_CFG"
+
+if [ "$MAINLINE" = "1" ]; then
+	# Currently ATF doesn't have fit configs, so use the same one as non-fit build
+	# If you wanna use mainline firmware, flash the preloader by OpenWrt/ImmortalWrt to BL2
+	# ATF_CFG_PATH="$ATF_DIR/configs-fit/$ATF_CFG"
+	UBOOT_CFG_PATH="$UBOOT_DIR/configs-fit/$UBOOT_CFG"
 	fixedparts=0
 	multilayout=0
 else
-	# Build fixed-mtdparts by default for NAND
-	fixedparts=${FIXED_MTDPARTS:-1}
-	multilayout=${MULTI_LAYOUT:-0}
-	if [ "$multilayout" = "1" ]; then
-		UBOOT_CFG="${SOC}_${BOARD}_multi_layout_defconfig"
+	if grep -Eq "CONFIG_FLASH_DEVICE_EMMC=y|_BOOT_DEVICE_EMMC=y" "$ATF_CFG_PATH" ; then
+		# No fixed-mtdparts or multilayout for EMMC
+		fixedparts=0
+		multilayout=0
+	else
+		# Build fixed-mtdparts by default for NAND
+		fixedparts=${FIXED_MTDPARTS:-1}
+		multilayout=${MULTI_LAYOUT:-0}
+		if [ "$multilayout" = "1" ]; then
+			UBOOT_CFG="${SOC}_${BOARD}_multi_layout_defconfig"
+		fi
+	fi
+
+	UBOOT_CFG_PATH="$UBOOT_DIR/configs/$UBOOT_CFG"
+	if [ "$multilayout" = "1" ] && [ ! -f "$UBOOT_CFG_PATH" ]; then
+		echo "Warning: $UBOOT_CFG_PATH not found, fallback to single-layout."
+		multilayout=0
+		UBOOT_CFG="${SOC}_${BOARD}_defconfig"
+		UBOOT_CFG_PATH="$UBOOT_DIR/configs/$UBOOT_CFG"
 	fi
 fi
 
-if [ "$multilayout" = "1" ] && [ ! -f "$UBOOT_DIR/configs/$UBOOT_CFG" ]; then
-	echo "Warning: $UBOOT_DIR/configs/$UBOOT_CFG not found, fallback to single-layout."
-	multilayout=0
-	UBOOT_CFG="${SOC}_${BOARD}_defconfig"
-fi
-
-for file in "$ATF_DIR/configs/$ATF_CFG" "$UBOOT_DIR/configs/$UBOOT_CFG"; do
+for file in "$ATF_CFG_PATH" "$UBOOT_CFG_PATH"; do
 	if [ ! -f "$file" ]; then
 		echo "$file not found!"
 		exit 1
@@ -78,7 +92,7 @@ echo "atf dir: $ATF_DIR"
 
 echo "Build u-boot..."
 rm -f "$UBOOT_DIR/u-boot.bin"
-cp -f "$UBOOT_DIR/configs/$UBOOT_CFG" "$UBOOT_DIR/.config"
+cp -f "$UBOOT_CFG_PATH" "$UBOOT_DIR/.config"
 if [ "$fixedparts" = "1" ]; then
 	echo "Build u-boot with fixed-mtdparts!"
 	echo "CONFIG_MEDIATEK_UBI_FIXED_MTDPARTS=y" >> "$UBOOT_DIR/.config"
@@ -108,11 +122,14 @@ make -C "$ATF_DIR" -f "$ATF_MKFILE" all CONFIG_CROSS_COMPILER="$TOOLCHAIN" CROSS
 
 mkdir -p "output"
 if [ -f "$ATF_DIR/build/${SOC}/release/fip.bin" ]; then
-		FIP_NAME="${SOC}_${BOARD}_${VERSION}-fip"
-		# Append '-dhcpd' for different VERSION
-		if [ "$VERSION" = "2022" ] || [ "$VERSION" = "2023" ] || [ "$VERSION" = "2024" ] || [ "$VERSION" = "2025" ]; then
-			FIP_NAME="${FIP_NAME}-dhcpd-Yuzhii"
-		fi
+	FIP_NAME="${SOC}_${BOARD}_${VERSION}-fip"
+	if [ "$MAINLINE" = "1" ]; then
+		FIP_NAME="${FIP_NAME}-fit"
+	fi
+	# Append '-dhcpd' for different VERSION
+	if [ "$VERSION" = "2022" ] || [ "$VERSION" = "2023" ] || [ "$VERSION" = "2024" ] || [ "$VERSION" = "2025" ]; then
+		FIP_NAME="${FIP_NAME}-dhcpd-Yuzhii"
+	fi
 	if [ "$fixedparts" = "1" ]; then
 		FIP_NAME="${FIP_NAME}-fixed-parts"
 	fi
@@ -125,7 +142,7 @@ else
 	echo "fip build fail!"
 	exit 1
 fi
-if grep -Eq "(^_|CONFIG_TARGET_ALL_NO_SEC_BOOT=y)" "$ATF_DIR/configs/$ATF_CFG"; then
+if grep -Eq "(^_|CONFIG_TARGET_ALL_NO_SEC_BOOT=y)" "$ATF_CFG_PATH"; then
 	if [ -f "$ATF_DIR/build/${SOC}/release/bl2.img" ]; then
 		BL2_NAME="${SOC}_${BOARD}_${VERSION}-bl2"
 		cp -f "$ATF_DIR/build/${SOC}/release/bl2.img" "output/${BL2_NAME}.bin"
