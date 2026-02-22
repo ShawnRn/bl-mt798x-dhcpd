@@ -34,7 +34,7 @@ __pycache__
 output/*
 output_gpt/*
 output_simg/*
-output_ramboot/*
+output_bl2/*
 mt798x_gpt_bin/*
 mt798x_simg/*
 unopen/*

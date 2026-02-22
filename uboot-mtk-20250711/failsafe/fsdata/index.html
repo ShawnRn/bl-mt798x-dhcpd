@@ -25,7 +25,7 @@
 				<div class="card-main">
 					<form id="form">
 						<div id="mtd_layout" style="display: none;">
-							<div id="current_mtd_layout"></div>
+							<div id="current_mtd_layout" hidden></div>
 							<br>
 							<div id="choose_mtd_layout" data-i18n="label.choose_mtd">Choose mtd layout:</div>
 							<select id="mtd_layout_label" name="mtd_layout_label" class="field-control"></select>
@@ -37,6 +37,7 @@
 							onclick="upload('firmware')">
 					</form>
 					<div class="bar" id="bar" style="display: none; --percent: 0;"></div>
+					<div id="filename" style="display: none;">File: xxxx</div>
 					<div id="size" style="display: none;">Size: xxxx</div>
 					<div id="md5" style="display: none;">MD5: xxxx</div>
 					<div id="mtd" style="display: none;">MTD layout: xxxx</div>

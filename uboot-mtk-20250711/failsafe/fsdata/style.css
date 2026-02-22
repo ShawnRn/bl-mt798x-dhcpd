@@ -494,7 +494,8 @@ input[type="file"] {
 }
 
 .sysinfo {
-    width: min(520px, 30%);
+    width: 100%;
+    max-width: 220px;
     margin: 0 auto 10px;
     padding: 10px 12px;
     border-radius: 12px;
@@ -504,7 +505,69 @@ input[type="file"] {
     font-size: 12px;
     line-height: 18px;
     text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.sysinfo.sysinfo-expanded {
+    max-width: var(--card-w);
+}
+
+.sysinfo-summary {
+    display: grid;
+    gap: 4px;
+    text-align: center;
+}
+
+.sysinfo-line {
     white-space: pre-line;
+}
+
+.sysinfo-mtdparts {
+    word-break: break-all;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.sysinfo-details {
+    margin-top: 8px;
+}
+
+.sysinfo-details > summary {
+    cursor: pointer;
+    color: var(--primary);
+    font-weight: 600;
+    list-style: none;
+}
+
+.sysinfo-details > summary::-webkit-details-marker {
+    display: none;
+}
+
+.sysinfo-details > summary::after {
+    content: "▾";
+    margin-left: 6px;
+    font-size: 12px;
+}
+
+.sysinfo-details[open] > summary::after {
+    content: "▴";
+}
+
+.sysinfo-extra {
+    margin-top: 8px;
+    display: grid;
+    gap: 4px;
+}
+
+.sysinfo-section {
+    margin-top: 4px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.sysinfo-list {
+    margin: 4px 0 0 18px;
+    color: var(--muted);
 }
 
 input[type="button"],
@@ -601,6 +664,7 @@ ul {
     transition: width var(--anim);
 }
 
+#filename,
 #md5,
 #size,
 #mtd {
@@ -609,6 +673,29 @@ ul {
     max-width: 520px;
     margin: 0 auto;
     text-align: left;
+}
+
+.md5-status {
+    font-weight: 700;
+}
+
+.md5-status.md5-ok {
+    color: #16a34a;
+}
+
+.md5-status.md5-bad {
+    color: var(--danger);
+}
+
+#filename {
+    text-align: center;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.filename-label,
+.filename-value {
+    display: block;
 }
 
 #upgrade,

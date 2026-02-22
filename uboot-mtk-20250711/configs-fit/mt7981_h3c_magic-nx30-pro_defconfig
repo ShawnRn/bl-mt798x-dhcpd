@@ -45,7 +45,7 @@ CONFIG_CMD_PING=y
 CONFIG_CMD_SMC=y
 CONFIG_CMD_MTDPARTS=y
 CONFIG_MTDIDS_DEFAULT="spi-nand0=spi-nand0"
-CONFIG_MTDPARTS_DEFAULT="spi-nand0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),-(ubi),6144k(pdt_data),6144k(pdt_data_1),1024k(exp),38400k(plugin)"
+CONFIG_MTDPARTS_DEFAULT="spi-nand0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),65536k(ubi),6144k(pdt_data),6144k(pdt_data_1),1024k(exp),38400k(plugin)"
 CONFIG_CMD_GL_BTN=y
 CONFIG_OF_EMBED=y
 CONFIG_ENV_OVERWRITE=y

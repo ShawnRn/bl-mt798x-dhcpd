@@ -24,6 +24,11 @@ else
     exit 1
 fi
 
+# Check if Python is installed on the system
+echo "Trying python2.7..."
+command -v python2.7
+[ "$?" != "0" ] && { echo "Error: Python2.7 is not installed on this system."; exit 0; }
+
 echo "Using GPT tools from: $tools_folder"
 
 # 确保输出文件夹存在，不存在则创建

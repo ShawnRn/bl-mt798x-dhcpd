@@ -19,7 +19,7 @@ on:
         default: 'cmcc_a10'
         type: string
       FIP_VERSION: 
-        description: 'FIP versions (comma-separated, e.g. 2022,2023,2024,2025/all)'
+        description: 'FIP versions (comma-separated, e.g. 2022,2023,2024,2025,2026/all)'
         required: true
         default: '2025'
         type: string
@@ -29,10 +29,28 @@ on:
         default: 'https://github.com/Yuzhii0718/bl-mt798x-dhcpd'
         type: string
       REPO_BRANCH:
-        description: 'Repository branch'
+        description: 'Repository branch (auto will pick master for <=2025, mtksoc-20260123 for 2026)'
         required: true
-        default: 'master'
+        default: 'auto'
         type: string
+      VARIANT:
+        description: 'Build variant (only effective for 2025/2026)'
+        required: false
+        default: 'default'
+        type: choice
+        options:
+          - default
+          - ubootmod
+          - nonmbm
+      EXTRA_OPTION:
+        description: 'Extra option'
+        required: false
+        default: 'default'
+        type: choice
+        options:
+          - default
+          - multi_layout
+          - dis_fixed_mtdparts
       GEN_BL2:
         description: 'Generate BL2 binary(v22/23 ATF only)'
         required: false
@@ -40,16 +58,6 @@ on:
         type: boolean
       OC_BL2:
         description: 'Build 1.6GHz BL2 by patch(Only mt7981)'
-        required: false
-        default: false
-        type: boolean
-      MULTI_LAYOUT:
-        description: 'Enable MULTI_LAYOUT(Only supported devices)'
-        required: false
-        default: false
-        type: boolean
-      DIS_FIXED_MTDPARTS:
-        description: 'Disable FIXED_MTDPARTS(See READEME)'
         required: false
         default: false
         type: boolean
@@ -77,7 +85,7 @@ on:
 env:
   UPLOAD_TAG_NAME: ${{ github.event.inputs.MODEL }}
   REPO_URL: ${{ github.event.inputs.REPO_URL }}
-  REPO_BRANCH: ${{ github.event.inputs.REPO_BRANCH }}
+  REPO_BRANCH_INPUT: ${{ github.event.inputs.REPO_BRANCH }}
   SSH_ACTIONS: false
   UPLOAD_FIRMWARE: true
   UPLOAD_RELEASE: true
@@ -90,6 +98,8 @@ env:
   atf24: atf-20240117-bacca82a8
   uboot25: uboot-mtk-20250711
   atf25: atf-20250711
+  uboot26: uboot-mtk-20260123
+  atf26: atf-20260123
 
 jobs:
   build:
@@ -108,26 +118,47 @@ jobs:
       run: |
         set -euo pipefail
 
-        # 互斥检查：DIS_FIXED_MTDPARTS 不能和 MULTI_LAYOUT 共存
-        if [ "${{ github.event.inputs.DIS_FIXED_MTDPARTS }}" = "true" ] && [ "${{ github.event.inputs.MULTI_LAYOUT }}" = "true" ]; then
-          echo "错误：DIS_FIXED_MTDPARTS 与 MULTI_LAYOUT 不能同时启用"
-          exit 1
+        VARIANT_IN="${{ github.event.inputs.VARIANT }}"
+        EXTRA_IN="${{ github.event.inputs.EXTRA_OPTION }}"
+
+        case "$VARIANT_IN" in
+          default|ubootmod|nonmbm) ;;
+          *)
+            echo "错误：非法 VARIANT: '$VARIANT_IN'（应为 default/ubootmod/nonmbm）" >&2
+            exit 1
+            ;;
+        esac
+
+        case "$EXTRA_IN" in
+          default|multi_layout|dis_fixed_mtdparts) ;;
+          *)
+            echo "错误：非法 EXTRA_OPTION: '$EXTRA_IN'（应为 default/multi_layout/dis_fixed_mtdparts）" >&2
+            exit 1
+            ;;
+        esac
+
+        # 提示：VARIANT 仅在 2025/2026 构建时注入到 build.sh；EXTRA_OPTION 对所有版本生效
+        FIP_INPUT="${{ github.event.inputs.FIP_VERSION }}"
+        if [[ "$FIP_INPUT" =~ ^(.+)-(mt798[0-9]+)$ ]]; then
+          FIP_INPUT="${BASH_REMATCH[1]}"
+        fi
+        if [ "$FIP_INPUT" != "all" ]; then
+          if ! echo ",${FIP_INPUT}," | grep -Eq ',(2025|2026)(,|$)'; then
+            if [ "$VARIANT_IN" != "default" ] || [ "$EXTRA_IN" != "default" ]; then
+              if [ "$VARIANT_IN" != "default" ]; then
+                echo "提示：当前 FIP_VERSION=$FIP_INPUT 未包含 2025/2026，VARIANT 将被忽略（EXTRA_OPTION 仍会生效）。"
+              fi
+            fi
+          fi
         fi
 
-        # 导出给后续步骤使用：默认不设置；启用时设置 FIXED_MTDPARTS=0
-        if [ "${{ github.event.inputs.DIS_FIXED_MTDPARTS }}" = "true" ]; then
-          echo "FIXED_MTDPARTS=0" >> "$GITHUB_ENV"
-          echo "已启用：FIXED_MTDPARTS=0"
-        else
-          echo "未启用：DIS_FIXED_MTDPARTS"
+        if [ "$VARIANT_IN" = "ubootmod" ] && [ "$EXTRA_IN" = "multi_layout" ]; then
+          echo "提示：VARIANT=ubootmod 不支持 multi_layout；将强制禁用 MULTI_LAYOUT。"
         fi
 
         if [ "${{ github.event.inputs.pub_release }}" = "false" ]; then
           echo "UPLOAD_RELEASE=false" >> $GITHUB_ENV
         fi
-
-    - name: 检查项目分支
-      uses: actions/checkout@master
 
     - name: 清理磁盘空间(local1)
       if: github.event.inputs.save_disk == 'true' && !cancelled()
@@ -136,12 +167,74 @@ jobs:
       run: |
         sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
 
+    - name: 下载源码
+      run: |
+        set -euo pipefail
+        sudo mkdir -p /workdir
+        sudo chown $USER:$GROUPS /workdir
+        cd /workdir
+        df -hT $PWD
+
+        REPO_URL_IN="$REPO_URL"
+        REPO_BRANCH_IN="$REPO_BRANCH_INPUT"
+
+        # 自动识别分支：参考 FIP-FIT 工作流的逻辑
+        # 注意：本工作流一次只 checkout 一个 ref；当输入同时包含 2026 与其他版本且 REPO_BRANCH=auto 时将报错。
+        FIP_INPUT="${{ github.event.inputs.FIP_VERSION }}"
+        if [[ "$FIP_INPUT" =~ ^(.+)-(mt798[0-9]+)$ ]]; then
+          FIP_INPUT="${BASH_REMATCH[1]}"
+        fi
+
+        if [ "$FIP_INPUT" = "all" ]; then
+          VERSIONS_STR="2022,2023,2024,2025,2026"
+        else
+          VERSIONS_STR="$FIP_INPUT"
+        fi
+        VERSIONS_STR="$(echo "$VERSIONS_STR" | tr -d '[:space:]')"
+
+        has_2026=0
+        total=0
+        IFS=',' read -ra _VERS <<< "$VERSIONS_STR"
+        for v in "${_VERS[@]}"; do
+          [ -z "$v" ] && continue
+          total=$((total+1))
+          if [ "$v" = "2026" ]; then
+            has_2026=1
+          fi
+        done
+
+        if [ -n "$REPO_BRANCH_IN" ] && [ "$REPO_BRANCH_IN" != "auto" ]; then
+          REPO_REF="$REPO_BRANCH_IN"
+        else
+          if [ "$has_2026" -eq 1 ] && [ "$total" -gt 1 ]; then
+            echo "错误：当 REPO_BRANCH=auto 且同时选择 2026 与其他版本时，无法自动选择单一分支。" >&2
+            echo "请改为：" >&2
+            echo "  - 仅选择 2026（或仅选择 <=2025），或" >&2
+            echo "  - 手动指定 REPO_BRANCH 为包含所有所选版本源码的分支。" >&2
+            exit 1
+          fi
+
+          if [ "$has_2026" -eq 1 ]; then
+            REPO_REF="mtksoc-20260123"
+          else
+            REPO_REF="master"
+          fi
+        fi
+
+        echo "Using source: $REPO_URL_IN (ref: $REPO_REF)"
+        git clone --depth 1 --branch "$REPO_REF" "$REPO_URL_IN" bl-mt798x-dhcpd
+
+        SOURCE_SHA="$(git -C bl-mt798x-dhcpd rev-parse HEAD)"
+        echo "REPO_BRANCH=$REPO_REF" >> "$GITHUB_ENV"
+        echo "SOURCE_SHA=$SOURCE_SHA" >> "$GITHUB_ENV"
+        ln -sf /workdir/bl-mt798x-dhcpd $GITHUB_WORKSPACE/bl-mt798x-dhcpd
+
     - name: 初始化编译环境
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
         sudo -E apt-get -qq update
-        sudo -E apt-get -qq install $(cat $GITHUB_WORKSPACE/depends/${{ matrix.os }})
+        sudo -E apt-get -qq install $(cat $GITHUB_WORKSPACE/bl-mt798x-dhcpd/depends/${{ matrix.os }})
         sudo -E apt-get -qq install rename tar
         sudo timedatectl set-timezone "$TZ"
         sudo mkdir -p /workdir
@@ -170,13 +263,6 @@ jobs:
         haskell: false
         large-packages: false
         swap-storage: false
-
-    - name: 下载源码
-      working-directory: /workdir
-      run: |
-        df -hT $PWD
-        git clone $REPO_URL -b $REPO_BRANCH bl-mt798x-dhcpd
-        ln -sf /workdir/bl-mt798x-dhcpd $GITHUB_WORKSPACE/bl-mt798x-dhcpd
 
     - name: SSH链接管理
       uses: P3TERX/ssh2actions@v1.0.0
@@ -209,7 +295,7 @@ jobs:
 
         # 解析需要编译的版本列表
         if [ "$FIP_INPUT" = "all" ]; then
-          SUPPORTED_VERSIONS=("2022" "2023" "2024" "2025")
+          SUPPORTED_VERSIONS=("2022" "2023" "2024" "2025" "2026")
           echo "检测到 all，将解析：${SUPPORTED_VERSIONS[*]}"
         else
           IFS=',' read -ra SUPPORTED_VERSIONS <<< "$FIP_INPUT"
@@ -223,6 +309,7 @@ jobs:
             2023) echo "${{ env.atf23 }}" "${{ env.uboot23 }}" ;;
             2024) echo "${{ env.atf24 }}" "${{ env.uboot23 }}" ;;
             2025) echo "${{ env.atf25 }}" "${{ env.uboot25 }}" ;;
+            2026) echo "${{ env.atf26 }}" "${{ env.uboot26 }}" ;;
             *) echo "" "" ;;
           esac
         }
@@ -400,12 +487,8 @@ jobs:
         chmod +x ./build.sh
         mkdir -p output
 
-        # MULTI_LAYOUT 开关
-        if [ "${{ github.event.inputs.MULTI_LAYOUT }}" = "true" ]; then
-          echo "已启用 MULTI_LAYOUT=1"
-        else
-          echo "未启用 MULTI_LAYOUT"
-        fi
+        VARIANT_INPUT="${{ github.event.inputs.VARIANT }}"
+        EXTRA_INPUT="${{ github.event.inputs.EXTRA_OPTION }}"
         
         FIP_INPUT="${{ github.event.inputs.FIP_VERSION }}"
         SOC_FILTER=""
@@ -417,7 +500,7 @@ jobs:
 
         # 解析需要编译的版本列表
         if [ "$FIP_INPUT" = "all" ]; then
-          SUPPORTED_VERSIONS=("2022" "2023" "2024" "2025")
+          SUPPORTED_VERSIONS=("2022" "2023" "2024" "2025" "2026")
           echo "检测到 all，将编译：${SUPPORTED_VERSIONS[*]}"
         else
           IFS=',' read -ra SUPPORTED_VERSIONS <<< "$FIP_INPUT"
@@ -479,14 +562,37 @@ jobs:
           for entry in $BUILD_MODELS; do
             soc="${entry%%_*}"
             model_name="${entry#*_}"
-            echo "正在编译${version}版本FIP（SOC：$soc，机型：$model_name）..."
-            if [ "${{ github.event.inputs.MULTI_LAYOUT }}" = "true" ]; then
-              SOC="$soc" BOARD="$model_name" VERSION=${version} MULTI_LAYOUT=1 ./build.sh 2>&1 | tee "output/build-${soc}-${model_name}-${version}.log"
-              build_rc=${PIPESTATUS[0]}
+
+            # EXTRA_OPTION：对所有版本生效
+            case "$EXTRA_INPUT" in
+              default)
+                MULTI_LAYOUT=0
+                FIXED_MTDPARTS=1
+                ;;
+              multi_layout)
+                MULTI_LAYOUT=1
+                FIXED_MTDPARTS=1
+                ;;
+              dis_fixed_mtdparts)
+                MULTI_LAYOUT=0
+                FIXED_MTDPARTS=0
+                ;;
+            esac
+
+            # VARIANT：仅对 2025/2026 生效
+            if [ "$version" = "2025" ] || [ "$version" = "2026" ]; then
+              VARIANT="$VARIANT_INPUT"
+              # ubootmod 变体不支持 multi_layout（与 build.sh 逻辑一致），这里直接强制关闭以避免输出描述不一致
+              if [ "$VARIANT" = "ubootmod" ]; then
+                MULTI_LAYOUT=0
+              fi
             else
-              SOC="$soc" BOARD="$model_name" VERSION=${version} ./build.sh 2>&1 | tee "output/build-${soc}-${model_name}-${version}.log"
-              build_rc=${PIPESTATUS[0]}
+              VARIANT="default"
             fi
+
+            echo "正在编译${version}版本FIP（SOC：$soc，机型：$model_name）..."
+            BOARD="$model_name" VERSION=${version} VARIANT="$VARIANT" MULTI_LAYOUT="$MULTI_LAYOUT" FIXED_MTDPARTS="$FIXED_MTDPARTS" SLIENT=Y ./build.sh 2>&1 | tee "output/build-${soc}-${model_name}-${version}.log"
+            build_rc=${PIPESTATUS[0]}
 
             if [ "$build_rc" -ne 0 ]; then
               echo "编译失败：soc=$soc model=$model_name version=$version (rc=$build_rc)，继续下一个"
@@ -587,32 +693,40 @@ jobs:
       run: |
         touch release.txt
 
-        echo "- 提交来源: ${{ github.sha }}" >> release.txt
+        echo "- 提交来源: ${{ env.SOURCE_SHA }}" >> release.txt
         echo "- 适配机型: ${{ env.UPLOAD_TAG_NAME }}" >> release.txt
         echo "- 使用源码: ${{ env.REPO_URL }}" >> release.txt
         echo "- 使用分支: ${{ env.REPO_BRANCH }}" >> release.txt
         echo "- 使用版本: ${{ github.event.inputs.FIP_VERSION }}" >> release.txt
-        if [ "${{ github.event.inputs.MULTI_LAYOUT }}" = "true" ]; then
-          echo "- 已启用 MULTI_LAYOUT=1" >> release.txt
+
+        echo "- 变体（仅2025/2026生效）: ${{ github.event.inputs.VARIANT }}" >> release.txt
+        echo "- 额外选项: ${{ github.event.inputs.EXTRA_OPTION }}" >> release.txt
+
+        if [ "${{ github.event.inputs.VARIANT }}" = "nonmbm" ]; then
+          echo "- 启用 NONMBM 变体（仅2025/2026）" >> release.txt
+        elif [ "${{ github.event.inputs.VARIANT }}" = "ubootmod" ]; then
+          echo "- 启用 UBOOTMOD 变体（仅2025/2026）" >> release.txt
         else
-          echo "- 未启用 MULTI_LAYOUT" >> release.txt
+          echo "- 使用 DEFAULT 变体" >> release.txt
+        fi
+
+        if [ "${{ github.event.inputs.EXTRA_OPTION }}" = "dis_fixed_mtdparts" ]; then
+          echo "- 已禁用 FIXED_MTDPARTS" >> release.txt
+        elif [ "${{ github.event.inputs.EXTRA_OPTION }}" = "multi_layout" ]; then
+          echo "- 已启用 MULTI_LAYOUT" >> release.txt
         fi
         if [ "${{ github.event.inputs.GEN_BL2 }}" = "true" ]; then
           echo "- 已开启 ATF22/23 BL2 生成" >> release.txt
-        else
-          echo "- 未开启 ATF22/23 BL2 生成" >> release.txt
         fi
         if [ "${{ github.event.inputs.OC_BL2 }}" = "true" ]; then
-          echo "- 已应用1.6GHz BL2超频补丁" >> release.txt
-        else
-          echo "- 未应用1.6GHz BL2超频补丁" >> release.txt
+          echo "- 已应用 MT7981 1.6GHz BL2超频补丁" >> release.txt
         fi
         CUSTOM_IP="${{ github.event.inputs.CUSTOM_IP }}"
         if [ "$CUSTOM_IP" != "false" ] && [ -n "$CUSTOM_IP" ]; then
           if echo "$CUSTOM_IP"; then
             echo "- 已应用特殊网段: $CUSTOM_IP" >> release.txt
           else
-            echo "- 特殊网段输入无效（CUSTOM_IP=$CUSTOM_IP），已保持默认网段192.168.1.1" >> release.txt
+            echo "- 特殊网段输入无效，已保持默认网段192.168.1.1" >> release.txt
           fi
         else
           echo "- 保持默认网段192.168.1.1" >> release.txt

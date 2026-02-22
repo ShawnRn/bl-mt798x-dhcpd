@@ -135,14 +135,12 @@ function ensureSidebar() {
         return u.className = "nav-link", u.href = n, u.setAttribute("data-nav-id", r), s = document.createElement("span"), s.className = "dot", u.appendChild(s), o = document.createElement("span"), o.setAttribute("data-i18n", i), o.textContent = t(i), u.appendChild(o), e = n, e !== "/" && e.charAt(0) !== "/" && (e = "/" + e), h = e === f || e === "/" && (f === "/" || f === "/index.html"), h && u.classList.add("active"), u
     }
     var i = document.getElementById("sidebar"),
-        f, k, s, h, c, d, r, l, g, n, a, v, y, p, e, w, u, b;
+        f, k, s, h, c, d, r, l, g, n, a, v, y, p, e, w, u, b, gptLink, simgLink;
     i && i.getAttribute("data-rendered") !== "1" && (i.setAttribute("data-rendered", "1"), f = location && location.pathname ? location.pathname : "", f === "" && (f = "/"), i.innerHTML = "", k = document.createElement("div"), k.className = "sidebar-brand", s = document.createElement("div"), s.className = "title", s.setAttribute("data-i18n", "app.name"), s.textContent = t("app.name"), k.appendChild(s), i.appendChild(k), h = document.createElement("div"), h.className = "sidebar-controls", c = document.createElement("div"), c.className = "control-row", d = document.createElement("div"), d.setAttribute("data-i18n", "control.language"), d.textContent = t("control.language"), c.appendChild(d), r = document.createElement("select"), r.id = "lang_select", r.innerHTML = '<option value="en">English<\/option><option value="zh-cn">简体中文<\/option>', r.value = APP_STATE.lang, r.onchange = function () {
         setLang(this.value)
     }, c.appendChild(r), h.appendChild(c), l = document.createElement("div"), l.className = "control-row", g = document.createElement("div"), g.setAttribute("data-i18n", "control.theme"), g.textContent = t("control.theme"), l.appendChild(g), n = document.createElement("select"), n.id = "theme_select", a = document.createElement("option"), a.value = "auto", a.setAttribute("data-i18n", "theme.auto"), a.textContent = t("theme.auto"), v = document.createElement("option"), v.value = "light", v.setAttribute("data-i18n", "theme.light"), v.textContent = t("theme.light"), y = document.createElement("option"), y.value = "dark", y.setAttribute("data-i18n", "theme.dark"), y.textContent = t("theme.dark"), n.appendChild(a), n.appendChild(v), n.appendChild(y), n.value = APP_STATE.theme, n.onchange = function () {
         setTheme(this.value)
-    }, l.appendChild(n), h.appendChild(l), i.appendChild(h), p = document.createElement("div"), p.className = "nav", e = document.createElement("div"), e.className = "nav-section", w = document.createElement("div"), w.className = "nav-section-title", w.setAttribute("data-i18n", "nav.basic"), w.textContent = t("nav.basic"), e.appendChild(w), e.appendChild(o("/", "nav.firmware", "firmware")), e.appendChild(o("/uboot.html", "nav.uboot", "uboot")), p.appendChild(e), u = document.createElement("div"), u.className = "nav-section", b = document.createElement("div"), b.className = "nav-section-title", b.setAttribute("data-i18n", "nav.advanced"), b.textContent = t("nav.advanced"), u.appendChild(b), u.appendChild(o("/bl2.html", "nav.bl2", "bl2")), u.appendChild(o("/gpt.html", "nav.gpt", "gpt")), u.appendChild(o("/factory.html", "nav.factory", "factory")), u.appendChild(o("/initramfs.html", "nav.initramfs", "initramfs")), p.appendChild(u), u = document.createElement("div"), u.className = "nav-section", b = document.createElement("div"), b.className = "nav-section-title", b.setAttribute("data-i18n", "nav.system"), b.textContent = t("nav.system"), u.appendChild(b), u.appendChild(o("/backup.html", "nav.backup", "backup")), u.appendChild(o("/flash.html", "nav.flash", "flash")), u.appendChild(o("/env.html", "nav.env", "env")), u.appendChild(o("/console.html", "nav.console", "console")), r = o("/reboot.html", "nav.reboot", "reboot"), r.onclick = function () {
-        return confirm(t("reboot.confirm"))
-    }, u.appendChild(r), p.appendChild(u), i.appendChild(p), applyI18n(i))
+    }, l.appendChild(n), h.appendChild(l), i.appendChild(h), p = document.createElement("div"), p.className = "nav", e = document.createElement("div"), e.className = "nav-section", w = document.createElement("div"), w.className = "nav-section-title", w.setAttribute("data-i18n", "nav.basic"), w.textContent = t("nav.basic"), e.appendChild(w), e.appendChild(o("/", "nav.firmware", "firmware")), e.appendChild(o("/uboot.html", "nav.uboot", "uboot")), p.appendChild(e), u = document.createElement("div"), u.className = "nav-section", b = document.createElement("div"), b.className = "nav-section-title", b.setAttribute("data-i18n", "nav.advanced"), b.textContent = t("nav.advanced"), u.appendChild(b), u.appendChild(o("/bl2.html", "nav.bl2", "bl2")), gptLink = o("/gpt.html", "nav.gpt", "gpt"), gptLink.style.display = "none", u.appendChild(gptLink), simgLink = o("/simg.html", "nav.simg", "simg"), simgLink.style.display = "none", u.appendChild(simgLink), u.appendChild(o("/factory.html", "nav.factory", "factory")), u.appendChild(o("/initramfs.html", "nav.initramfs", "initramfs")), p.appendChild(u), u = document.createElement("div"), u.className = "nav-section", b = document.createElement("div"), b.className = "nav-section-title", b.setAttribute("data-i18n", "nav.system"), b.textContent = t("nav.system"), u.appendChild(b), u.appendChild(o("/backup.html", "nav.backup", "backup")), u.appendChild(o("/flash.html", "nav.flash", "flash")), u.appendChild(o("/env.html", "nav.env", "env")), u.appendChild(o("/console.html", "nav.console", "console")), r = o("/reboot.html", "nav.reboot", "reboot"), u.appendChild(r), p.appendChild(u), i.appendChild(p), applyI18n(i), updateGptNavVisibility(), updateSimgNavVisibility())
 }
 
 function ajax(n) {
@@ -491,6 +489,10 @@ function appInit(n) {
     n === "flash" && flashInit();
     n === "console" && consoleInit();
     n === "env" && envInit()
+
+    const Yuzhii_VERSION = 'UBOOT-MTK-20250711';
+    const Yuzhii_LINK = 'https://github.com/Yuzhii0718/';
+    console.log('\n%c Yuzhii0718 ' + Yuzhii_VERSION + ' %c ' + Yuzhii_LINK + ' ', 'color: #fadfa3; background: #030307; padding:5px 0;', 'background: #fadfa3; padding:5px 0;');
 }
 
 function updateGptNavVisibility() {
@@ -499,15 +501,42 @@ function updateGptNavVisibility() {
     var el = document.querySelector("#sidebar [data-nav-id='gpt']");
     if (!el) return;
     var bi = APP_STATE.backupinfo;
-    if (bi && bi.mmc && bi.mmc.present === false) {
+    if (!bi || !bi.mmc || typeof bi.mmc.present === "undefined") {
         el.style.display = "none";
-    } else {
-        el.style.display = "";
+        return;
+    }
+    el.style.display = bi.mmc.present === false ? "none" : "";
+    console.warn("GPT nav visibility updated based on MMC presence:", bi.mmc.present);
+}
+
+function updateSimgNavVisibility() {
+    // Hide Single Image entry unless the page is actually served.
+    var el = document.querySelector("#sidebar [data-nav-id='simg']");
+    if (!el) return;
+    el.style.display = "none";
+
+    // Avoid repeated probes.
+    if (APP_STATE._simg_probe_done) return;
+    APP_STATE._simg_probe_done = true;
+
+    try {
+        fetch("/simg.html?_probe=1", { method: "GET", cache: "no-store" })
+            .then(function (r) {
+                if (r && r.ok) {
+                    el.style.display = "";
+                    return;
+                }
+                console.warn("SIMG probe HTTP status:", r ? r.status : "unknown");
+                console.info("If SIMG feature is not enabled, this warning is expected.");
+            })
+            .catch(function () { });
+    } catch (e) {
+        console.warn("Unexpected error during SIMG probe:", e);
     }
 }
 
 function renderSysInfo() {
-    var n = document.getElementById("sysinfo"), i, r, u, f, e;
+    var n = document.getElementById("sysinfo"), i, u, f;
     if (!n) return;
     i = APP_STATE.sysinfo;
     if (!i) {
@@ -516,11 +545,126 @@ function renderSysInfo() {
     }
     u = i.board || {};
     f = i.ram || {};
-    e = [];
-    e.push(t("sysinfo.board") + " " + (u.model || t("sysinfo.unknown")));
-    f.size !== undefined && f.size !== null && f.size !== 0 ? e.push(t("sysinfo.ram") + " " + bytesToHuman(f.size)) : e.push(t("sysinfo.ram") + " " + t("sysinfo.unknown"));
 
-    n.textContent = e.join("\n")
+    while (n.firstChild) n.removeChild(n.firstChild);
+    n.classList.remove("sysinfo-expanded");
+
+    var summary = document.createElement("div");
+    summary.className = "sysinfo-summary";
+
+    var boardLine = document.createElement("div");
+    boardLine.className = "sysinfo-line";
+    boardLine.textContent = t("sysinfo.board") + " " + (u.model || t("sysinfo.unknown"));
+    summary.appendChild(boardLine);
+
+    var ramLine = document.createElement("div");
+    ramLine.className = "sysinfo-line";
+    ramLine.textContent = t("sysinfo.ram") + " " + (f.size !== undefined && f.size !== null && f.size !== 0 ? bytesToHuman(f.size) : t("sysinfo.unknown"));
+    summary.appendChild(ramLine);
+
+    if (i.storage && i.storage.mtd_layout) {
+        var mtdSummary = i.storage.mtd_layout || {};
+        if (mtdSummary.current) {
+            var curLayoutLine = document.createElement("div");
+            curLayoutLine.className = "sysinfo-line";
+            curLayoutLine.textContent = t("sysinfo.mtd.current", "MTD layout") + " " + mtdSummary.current;
+            summary.appendChild(curLayoutLine);
+        }
+    }
+
+    n.appendChild(summary);
+
+    var details = document.createElement("details");
+    details.className = "sysinfo-details";
+
+    var summaryNode = document.createElement("summary");
+    summaryNode.textContent = t("sysinfo.more", "More info");
+    details.appendChild(summaryNode);
+
+    var extra = document.createElement("div");
+    extra.className = "sysinfo-extra";
+
+    if (i.storage && i.storage.mtd_layout) {
+        if (mtdSummary.current_parts) {
+            var curPartsLine = document.createElement("div");
+            curPartsLine.className = "sysinfo-line sysinfo-mtdparts";
+            curPartsLine.textContent = t("sysinfo.mtd.parts", "MTD parts") + " " + mtdSummary.current_parts;
+            extra.appendChild(curPartsLine);
+        }
+    }
+
+    if (i.build_variant) {
+        var variantLine = document.createElement("div");
+        variantLine.className = "sysinfo-line";
+        variantLine.textContent = t("sysinfo.variant", "Variant") + " " + i.build_variant;
+        extra.appendChild(variantLine);
+    }
+
+    if (u.compatible) {
+        var compatLine = document.createElement("div");
+        compatLine.className = "sysinfo-line";
+        compatLine.textContent = t("sysinfo.compat", "Compatible") + " " + u.compatible;
+        extra.appendChild(compatLine);
+    }
+
+    if (i.storage && i.storage.mtd_layout) {
+        var mtd = i.storage.mtd_layout || {};
+        var layouts = mtd.layouts || [];
+        if (layouts && layouts.length) {
+            var layoutTitle = document.createElement("div");
+            layoutTitle.className = "sysinfo-line sysinfo-section";
+            layoutTitle.textContent = t("sysinfo.mtd.layouts", "MTD layouts");
+            extra.appendChild(layoutTitle);
+
+            var layoutList = document.createElement("ul");
+            layoutList.className = "sysinfo-list";
+            for (var li = 0; li < layouts.length; li++) {
+                var item = layouts[li] || {};
+                var entry = document.createElement("li");
+                var parts = item.parts ? " " + item.parts : "";
+                entry.textContent = (item.label || "-") + ":" + parts;
+                layoutList.appendChild(entry);
+            }
+            extra.appendChild(layoutList);
+        }
+    }
+
+    if (i.storage && i.storage.mmc && i.storage.mmc.present) {
+        var mmc = i.storage.mmc;
+        var mmcTitle = document.createElement("div");
+        mmcTitle.className = "sysinfo-line sysinfo-section";
+        mmcTitle.textContent = t("sysinfo.mmc", "MMC partitions");
+        extra.appendChild(mmcTitle);
+
+        if (mmc.parts && mmc.parts.length) {
+            var list = document.createElement("ul");
+            list.className = "sysinfo-list";
+            for (var iPart = 0; iPart < mmc.parts.length; iPart++) {
+                var p = mmc.parts[iPart];
+                var li = document.createElement("li");
+                var sizeTxt = p.size ? bytesToHuman(p.size) : t("sysinfo.unknown");
+                li.textContent = (p.name || "-") + " (" + sizeTxt + ")";
+                list.appendChild(li);
+            }
+            extra.appendChild(list);
+        } else {
+            var empty = document.createElement("div");
+            empty.className = "sysinfo-line";
+            empty.textContent = t("sysinfo.mmc.none", "No partitions");
+            extra.appendChild(empty);
+        }
+    }
+
+    if (extra.childNodes.length) {
+        details.appendChild(extra);
+        n.appendChild(details);
+
+        var toggleExpanded = function () {
+            details.open ? n.classList.add("sysinfo-expanded") : n.classList.remove("sysinfo-expanded");
+        };
+        details.addEventListener("toggle", toggleExpanded);
+        toggleExpanded();
+    }
 }
 
 function getSysInfo() {
@@ -631,13 +775,13 @@ function getversion() {
 
 function upload(n) {
     var o = document.getElementById("file").files[0],
-        u, f, e, r, i, s;
-    o && (u = document.getElementById("form"), u && (u.style.display = "none"), f = document.getElementById("hint"), f && (f.style.display = "none"), e = document.getElementById("bar"), e && (e.style.display = "block"), r = new FormData, r.append(n, o), i = document.getElementById("mtd_layout_label"), i && i.options.length > 0 && (s = i.selectedIndex, r.append("mtd_layout", i.options[s].value)), ajax({
+        u, f, e, r, i, s, a;
+    o && (a = o.name || "", u = document.getElementById("form"), u && (u.style.display = "none"), f = document.getElementById("hint"), f && (f.style.display = "none"), e = document.getElementById("bar"), e && (e.style.display = "block"), r = new FormData, r.append(n, o), i = document.getElementById("mtd_layout_label"), i && i.options.length > 0 && (s = i.selectedIndex, r.append("mtd_layout", i.options[s].value)), ajax({
         url: "/upload",
         data: r,
         done: function (n) {
-            var i, r, u, f, e;
-            n == "fail" ? location = "/fail.html" : (i = n.split(" "), r = document.getElementById("size"), r && (r.style.display = "block", r.innerHTML = t("label.size") + i[0]), u = document.getElementById("md5"), u && (u.style.display = "block", u.innerHTML = t("label.md5") + i[1]), f = document.getElementById("mtd"), f && i[2] && (f.style.display = "block", f.innerHTML = t("label.mtd") + i[2]), e = document.getElementById("upgrade"), e && (e.style.display = "block"))
+            var i, r, u, f, e, l, md5InName, md5Hint, md5Ok, md5Match, md5Class;
+            n == "fail" ? location = "/fail.html" : (i = n.split(" "), l = document.getElementById("filename"), l && a && (l.style.display = "block", l.innerHTML = "<span class=\"filename-label\">" + t("label.file") + "</span><span class=\"filename-value\">" + a + "</span>"), r = document.getElementById("size"), r && (r.style.display = "block", r.innerHTML = t("label.size") + i[0]), u = document.getElementById("md5"), md5Match = a ? /(?:^|[._-])md5-([0-9a-fA-F]{32})(?:$|[._-])/.exec(a) : null, md5InName = md5Match && md5Match[1] ? md5Match[1] : "", u && (u.style.display = "block", md5Ok = i[1] && md5InName && String(i[1]).toLowerCase() === String(md5InName).toLowerCase(), md5Hint = md5InName ? (md5Ok ? t("md5.match") : t("md5.mismatch")) : "", md5Class = md5InName ? (md5Ok ? "md5-ok" : "md5-bad") : "", u.innerHTML = t("label.md5") + i[1] + (md5Hint ? " <span class=\"md5-status " + md5Class + "\">" + md5Hint + "</span>" : "")), f = document.getElementById("mtd"), f && i[2] && (f.style.display = "block", f.innerHTML = t("label.mtd") + i[2]), e = document.getElementById("upgrade"), e && (e.style.display = "block"))
         },
         progress: function (n) {
             if (n.total) {
