@@ -27,7 +27,11 @@ static const struct data_part_entry mtd_parts[] = {
 #ifdef CONFIG_MTK_DUAL_FIP
 		.write = generic_ubi_write_dual_fip,
 #else
+#ifdef CONFIG_MTK_UBI_FIP_IN_MTD_PART
+		.write = generic_mtd_write_fip,
+#else
 		.write = generic_ubi_write_fip,
+#endif
 #endif
 		.post_action = UPGRADE_ACTION_CUSTOM,
 		//.do_post_action = generic_invalidate_env,
@@ -38,7 +42,11 @@ static const struct data_part_entry mtd_parts[] = {
 		.abbr = "bl31",
 		.env_name = "bootfile.bl31",
 		.validate = generic_validate_bl31,
+#ifdef CONFIG_MTK_UBI_FIP_IN_MTD_PART
+		.write = generic_mtd_update_bl31,
+#else
 		.write = generic_ubi_update_bl31,
+#endif
 		.post_action = UPGRADE_ACTION_CUSTOM,
 	},
 	{
@@ -46,7 +54,11 @@ static const struct data_part_entry mtd_parts[] = {
 		.abbr = "bl33",
 		.env_name = "bootfile.bl33",
 		.validate = generic_validate_bl33,
+#ifdef CONFIG_MTK_UBI_FIP_IN_MTD_PART
+		.write = generic_mtd_update_bl33,
+#else
 		.write = generic_ubi_update_bl33,
+#endif
 		.post_action = UPGRADE_ACTION_CUSTOM,
 		//.do_post_action = generic_invalidate_env,
 	},
@@ -72,7 +84,11 @@ static const struct data_part_entry mtd_parts[] = {
 		.name = "Factory",
 		.abbr = "factory",
 		.env_name = "bootfile.factory",
+#ifdef CONFIG_MTK_UBI_RF_IN_MTD_PART
 		.write = generic_mtd_write_factory,
+#else
+		.write = generic_ubi_write_factory,
+#endif
 	},
 	{
 		.name = "Single image",
