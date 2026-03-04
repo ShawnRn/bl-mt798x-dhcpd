@@ -1,3 +1,14 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright (C) 2026 Yuzhii0718
+ *
+ * All rights reserved.
+ *
+ * This file is part of the project bl-mt798x-dhcpd
+ * You may not use, copy, modify or distribute this file except in compliance with the license agreement.
+ */
+/* SPDX-License-Identifier: GPL-2.0 */
+
 :root {
     color-scheme: light;
     --bg: #f6f7fb;
@@ -10,6 +21,7 @@
     --shadow-soft: 0 8px 18px rgba(2, 6, 23, 0.08);
     --primary: #2563eb;
     --primary-2: #60a5fa;
+    --primary-rgb: 37, 99, 235;
     --danger: #dc2626;
     --warn-bg: rgba(245, 158, 11, 0.12);
     --warn-border: rgba(245, 158, 11, 0.35);
@@ -20,6 +32,12 @@
     --card-w: 760px;
     --sidebar-w: 260px;
     --anim: 220ms cubic-bezier(.2, .8, .2, 1);
+    --theme-anim: 700ms cubic-bezier(.22, .61, .36, 1);
+}
+
+html.theme-transition,
+html.theme-transition * {
+    transition: background-color var(--theme-anim);
 }
 
 @media (prefers-color-scheme:dark) {
@@ -35,6 +53,7 @@
         --shadow-soft: 0 10px 22px rgba(0, 0, 0, 0.28);
         --primary: #60a5fa;
         --primary-2: #93c5fd;
+        --primary-rgb: 96, 165, 250;
         --danger: #f87171;
         --warn-bg: rgba(245, 158, 11, 0.10);
         --warn-border: rgba(245, 158, 11, 0.35);
@@ -55,6 +74,7 @@ html[data-theme="light"] {
     --shadow-soft: 0 8px 18px rgba(2, 6, 23, 0.08);
     --primary: #2563eb;
     --primary-2: #60a5fa;
+    --primary-rgb: 37, 99, 235;
 }
 
 html[data-theme="dark"] {
@@ -69,6 +89,7 @@ html[data-theme="dark"] {
     --shadow-soft: 0 10px 22px rgba(0, 0, 0, 0.28);
     --primary: #60a5fa;
     --primary-2: #93c5fd;
+    --primary-rgb: 96, 165, 250;
 }
 
 * {
@@ -154,7 +175,69 @@ body {
 }
 
 .control-row select:focus {
-    border-color: rgba(37, 99, 235, 0.55);
+    border-color: rgba(var(--primary-rgb), 0.55);
+}
+
+.control-row.control-row-color {
+    grid-template-columns: 86px 1fr;
+    align-items: start;
+}
+
+.color-picker {
+    display: grid;
+    gap: 8px;
+}
+
+.color-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.color-swatch {
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(2, 6, 23, 0.18);
+    transition: transform var(--anim), box-shadow var(--anim);
+}
+
+.color-swatch:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(2, 6, 23, 0.22);
+}
+
+.color-swatch.active {
+    outline: 2px solid rgba(var(--primary-rgb), 0.75);
+    outline-offset: 2px;
+}
+
+.color-inputs {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 6px;
+    align-items: center;
+}
+
+.color-inputs input[type="text"] {
+    width: 100%;
+    padding: 6px 8px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    font-size: 12px;
+}
+
+.color-inputs input[type="color"] {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
 }
 
 .nav {
@@ -189,14 +272,14 @@ body {
 }
 
 .nav-link:hover {
-    background: rgba(37, 99, 235, 0.08);
-    border-color: rgba(37, 99, 235, 0.20);
+    background: rgba(var(--primary-rgb), 0.08);
+    border-color: rgba(var(--primary-rgb), 0.20);
     transform: translateX(2px);
 }
 
 .nav-link.active {
-    background: rgba(37, 99, 235, 0.12);
-    border-color: rgba(37, 99, 235, 0.35);
+    background: rgba(var(--primary-rgb), 0.12);
+    border-color: rgba(var(--primary-rgb), 0.35);
 }
 
 .nav-link .dot {
@@ -204,7 +287,7 @@ body {
     height: 10px;
     border-radius: 999px;
     background: var(--primary);
-    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+    box-shadow: 0 0 0 4px rgba(var(--primary-rgb), 0.12);
 }
 
 .main {
@@ -382,8 +465,8 @@ form {
 }
 
 .field-control:focus {
-    border-color: rgba(37, 99, 235, 0.55);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    border-color: rgba(var(--primary-rgb), 0.55);
+    box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.12);
 }
 
 .backup-range-hint {
@@ -461,8 +544,8 @@ form {
 }
 
 .hex-input:focus {
-    border-color: rgba(37, 99, 235, 0.55);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    border-color: rgba(var(--primary-rgb), 0.55);
+    box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.12);
 }
 
 .hex-tools {
@@ -573,8 +656,8 @@ input[type="file"] {
 input[type="button"],
 button.button {
     appearance: none;
-    border: 1px solid rgba(37, 99, 235, 0.35);
-    background: linear-gradient(180deg, rgba(37, 99, 235, 0.90), rgba(37, 99, 235, 0.78));
+    border: 1px solid rgba(var(--primary-rgb), 0.35);
+    background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.90), rgba(var(--primary-rgb), 0.78));
     color: white;
     border-radius: 14px;
     padding: 10px 18px;
@@ -582,7 +665,7 @@ button.button {
     font-weight: 800;
     cursor: pointer;
     transition: transform var(--anim), filter var(--anim), box-shadow var(--anim);
-    box-shadow: 0 10px 24px rgba(37, 99, 235, 0.22);
+    box-shadow: 0 10px 24px rgba(var(--primary-rgb), 0.22);
     margin: 6px;
 }
 
@@ -823,8 +906,8 @@ ul {
 
 .console-input:focus,
 .console-token:focus {
-    border-color: rgba(37, 99, 235, .55);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
+    border-color: rgba(var(--primary-rgb), .55);
+    box-shadow: 0 0 0 3px rgba(var(--primary-rgb), .12);
 }
 
 .console-status {
@@ -869,7 +952,7 @@ ul {
     border-left: 7px solid #eaf1ff;
     border-right: 7px solid #eaf1ff;
     border-bottom: 7px solid #eaf1ff;
-    border-top: 7px solid #2450ad;
+    border-top: 7px solid var(--primary);
     border-radius: 100%;
 }
 

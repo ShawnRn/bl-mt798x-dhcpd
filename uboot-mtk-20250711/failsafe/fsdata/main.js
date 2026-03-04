@@ -103,6 +103,227 @@ function setTheme(n) {
     APP_STATE.theme === "auto" ? t.removeAttribute("data-theme") : t.setAttribute("data-theme", APP_STATE.theme)
 }
 
+var THEME_COLOR_ENV_KEY = "failsafe_theme_color";
+var THEME_COLOR_CACHE_KEY = "failsafe_theme_color_cache";
+var ACCENT_PRESETS = ["#2563eb", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444", "#a855f7"];
+
+function normalizeHexColor(input) {
+    var s, hex;
+    if (!input) return null;
+    s = String(input).trim();
+    if (s === "") return null;
+    if (s[0] === "#") s = s.slice(1);
+    if (!/^[0-9a-fA-F]{3}$/.test(s) && !/^[0-9a-fA-F]{6}$/.test(s)) return null;
+    if (s.length === 3) {
+        hex = "#" + s[0] + s[0] + s[1] + s[1] + s[2] + s[2];
+    } else {
+        hex = "#" + s;
+    }
+    return hex.toLowerCase();
+}
+
+function hexToRgb(hex) {
+    var n = normalizeHexColor(hex);
+    if (!n) return null;
+    return {
+        r: parseInt(n.slice(1, 3), 16),
+        g: parseInt(n.slice(3, 5), 16),
+        b: parseInt(n.slice(5, 7), 16)
+    };
+}
+
+function applyAccentVars(color) {
+    var norm = normalizeHexColor(color);
+    var rgb, root, lighter;
+    if (!norm) return false;
+    rgb = hexToRgb(norm);
+    if (!rgb) return false;
+    root = document.documentElement;
+    root.style.setProperty("--primary", norm);
+    root.style.setProperty("--primary-rgb", rgb.r + ", " + rgb.g + ", " + rgb.b);
+    lighter = blendColor(norm, "#ffffff", 0.28);
+    root.style.setProperty("--primary-2", lighter);
+    ensureThemeColorMeta(norm);
+    return true;
+}
+
+function blendColor(hex, targetHex, t) {
+    var a = hexToRgb(hex);
+    var b = hexToRgb(targetHex);
+    if (!a || !b) return hex;
+    var r = Math.round(a.r + (b.r - a.r) * t);
+    var g = Math.round(a.g + (b.g - a.g) * t);
+    var b2 = Math.round(a.b + (b.b - a.b) * t);
+    return "#" + r.toString(16).padStart(2, "0") + g.toString(16).padStart(2, "0") + b2.toString(16).padStart(2, "0");
+}
+
+function ensureThemeColorMeta(color) {
+    if (!color) return;
+    var meta = document.querySelector("meta[name='theme-color']");
+    if (!meta) {
+        meta = document.createElement("meta");
+        meta.setAttribute("name", "theme-color");
+        document.head && document.head.appendChild(meta);
+    }
+    meta.setAttribute("content", color);
+}
+
+function updateAccentControls(color) {
+    var picker = document.getElementById("accent_color_picker");
+    var input = document.getElementById("accent_color_input");
+    var norm = normalizeHexColor(color);
+    var swatches, i, sw;
+    if (picker && norm) picker.value = norm;
+    if (input && norm) input.value = norm;
+    swatches = document.querySelectorAll(".color-swatch");
+    for (i = 0; i < swatches.length; i++) {
+        sw = swatches[i];
+        if (!sw || !sw.dataset) continue;
+        if (norm && String(sw.dataset.color || "").toLowerCase() === norm)
+            sw.classList.add("active");
+        else
+            sw.classList.remove("active");
+    }
+}
+
+function applyAccentColor(color) {
+    var ok = applyAccentVars(color);
+    if (!ok) return false;
+    updateAccentControls(color);
+    return true;
+}
+
+(function applyAccentFromCache() {
+    try {
+        var cached = localStorage.getItem(THEME_COLOR_CACHE_KEY);
+        if (cached) applyAccentVars(cached);
+    } catch (e) { }
+})();
+
+async function saveThemeColor(color) {
+    var norm = normalizeHexColor(color);
+    if (!norm) return;
+    try {
+        localStorage.setItem(THEME_COLOR_CACHE_KEY, norm);
+    } catch (e) { }
+    try {
+        var fd = new FormData();
+        fd.append("color", norm);
+        await fetch("/theme/set", { method: "POST", body: fd });
+    } catch (e) { }
+}
+
+async function loadThemeColor() {
+    var current = null;
+    var fromEnv = false;
+    try {
+        var r = await fetch("/theme/get", { method: "GET" });
+        if (r && r.ok) {
+            var j = await r.json();
+            if (j && j.color) {
+                current = normalizeHexColor(j.color);
+                fromEnv = !!current;
+            }
+        }
+    } catch (e) { }
+
+    if (!current) {
+        try {
+            current = (getComputedStyle(document.documentElement)
+                .getPropertyValue("--primary") || "").trim();
+            current = normalizeHexColor(current);
+        } catch (e2) { }
+    }
+
+    if (current) {
+        if (fromEnv)
+            applyAccentColor(current);
+        if (fromEnv) {
+            try {
+                localStorage.setItem(THEME_COLOR_CACHE_KEY, current);
+            } catch (e3) { }
+        }
+        updateAccentControls(current);
+    }
+}
+
+function appendAccentControls(container) {
+    if (!container) return;
+
+    var row = document.createElement("div");
+    row.className = "control-row control-row-color";
+
+    var label = document.createElement("div");
+    label.setAttribute("data-i18n", "control.accent");
+    label.textContent = t("control.accent");
+    row.appendChild(label);
+
+    var picker = document.createElement("div");
+    picker.className = "color-picker";
+
+    var presets = document.createElement("div");
+    presets.className = "color-presets";
+    ACCENT_PRESETS.forEach(function (c) {
+        var sw = document.createElement("button");
+        sw.type = "button";
+        sw.className = "color-swatch";
+        sw.dataset.color = c.toLowerCase();
+        sw.style.backgroundColor = c;
+        sw.onclick = function () {
+            applyAccentColor(c);
+            saveThemeColor(c);
+        };
+        presets.appendChild(sw);
+    });
+
+    var inputs = document.createElement("div");
+    inputs.className = "color-inputs";
+
+    var text = document.createElement("input");
+    text.type = "text";
+    text.id = "accent_color_input";
+    text.setAttribute("data-i18n-attr", "placeholder:theme.color.placeholder");
+    text.placeholder = t("theme.color.placeholder");
+    text.addEventListener("change", function () {
+        var norm = normalizeHexColor(text.value);
+        if (!norm) return;
+        applyAccentColor(norm);
+        saveThemeColor(norm);
+    });
+
+    var color = document.createElement("input");
+    color.type = "color";
+    color.id = "accent_color_picker";
+    color.setAttribute("data-i18n-attr", "title:theme.color.custom");
+    color.title = t("theme.color.custom");
+    color.addEventListener("input", function () {
+        applyAccentColor(color.value);
+        saveThemeColor(color.value);
+    });
+
+    inputs.appendChild(text);
+    inputs.appendChild(color);
+
+    picker.appendChild(presets);
+    picker.appendChild(inputs);
+
+    row.appendChild(picker);
+    container.appendChild(row);
+}
+
+function ensureFavicon() {
+    var link = document.querySelector("link[rel='icon']");
+    if (!link) {
+        link = document.createElement("link");
+        link.setAttribute("rel", "icon");
+        link.setAttribute("type", "image/svg+xml");
+        link.setAttribute("href", "/favicon.svg");
+        document.head && document.head.appendChild(link);
+    } else {
+        link.setAttribute("href", "/favicon.svg");
+    }
+}
+
 function updateDocumentTitle() {
     if (!isI18nEnabled() || !isI18nAvailable())
         return;
@@ -140,7 +361,7 @@ function ensureSidebar() {
         setLang(this.value)
     }, c.appendChild(r), h.appendChild(c), l = document.createElement("div"), l.className = "control-row", g = document.createElement("div"), g.setAttribute("data-i18n", "control.theme"), g.textContent = t("control.theme"), l.appendChild(g), n = document.createElement("select"), n.id = "theme_select", a = document.createElement("option"), a.value = "auto", a.setAttribute("data-i18n", "theme.auto"), a.textContent = t("theme.auto"), v = document.createElement("option"), v.value = "light", v.setAttribute("data-i18n", "theme.light"), v.textContent = t("theme.light"), y = document.createElement("option"), y.value = "dark", y.setAttribute("data-i18n", "theme.dark"), y.textContent = t("theme.dark"), n.appendChild(a), n.appendChild(v), n.appendChild(y), n.value = APP_STATE.theme, n.onchange = function () {
         setTheme(this.value)
-    }, l.appendChild(n), h.appendChild(l), i.appendChild(h), p = document.createElement("div"), p.className = "nav", e = document.createElement("div"), e.className = "nav-section", w = document.createElement("div"), w.className = "nav-section-title", w.setAttribute("data-i18n", "nav.basic"), w.textContent = t("nav.basic"), e.appendChild(w), e.appendChild(o("/", "nav.firmware", "firmware")), e.appendChild(o("/uboot.html", "nav.uboot", "uboot")), p.appendChild(e), u = document.createElement("div"), u.className = "nav-section", b = document.createElement("div"), b.className = "nav-section-title", b.setAttribute("data-i18n", "nav.advanced"), b.textContent = t("nav.advanced"), u.appendChild(b), u.appendChild(o("/bl2.html", "nav.bl2", "bl2")), gptLink = o("/gpt.html", "nav.gpt", "gpt"), gptLink.style.display = "none", u.appendChild(gptLink), simgLink = o("/simg.html", "nav.simg", "simg"), simgLink.style.display = "none", u.appendChild(simgLink), u.appendChild(o("/factory.html", "nav.factory", "factory")), u.appendChild(o("/initramfs.html", "nav.initramfs", "initramfs")), p.appendChild(u), u = document.createElement("div"), u.className = "nav-section", b = document.createElement("div"), b.className = "nav-section-title", b.setAttribute("data-i18n", "nav.system"), b.textContent = t("nav.system"), u.appendChild(b), u.appendChild(o("/backup.html", "nav.backup", "backup")), u.appendChild(o("/flash.html", "nav.flash", "flash")), u.appendChild(o("/env.html", "nav.env", "env")), u.appendChild(o("/console.html", "nav.console", "console")), r = o("/reboot.html", "nav.reboot", "reboot"), u.appendChild(r), p.appendChild(u), i.appendChild(p), applyI18n(i), updateGptNavVisibility(), updateSimgNavVisibility())
+    }, l.appendChild(n), h.appendChild(l), appendAccentControls(h), i.appendChild(h), p = document.createElement("div"), p.className = "nav", e = document.createElement("div"), e.className = "nav-section", w = document.createElement("div"), w.className = "nav-section-title", w.setAttribute("data-i18n", "nav.basic"), w.textContent = t("nav.basic"), e.appendChild(w), e.appendChild(o("/", "nav.firmware", "firmware")), e.appendChild(o("/uboot.html", "nav.uboot", "uboot")), p.appendChild(e), u = document.createElement("div"), u.className = "nav-section", b = document.createElement("div"), b.className = "nav-section-title", b.setAttribute("data-i18n", "nav.advanced"), b.textContent = t("nav.advanced"), u.appendChild(b), u.appendChild(o("/bl2.html", "nav.bl2", "bl2")), gptLink = o("/gpt.html", "nav.gpt", "gpt"), gptLink.style.display = "none", u.appendChild(gptLink), simgLink = o("/simg.html", "nav.simg", "simg"), simgLink.style.display = "none", u.appendChild(simgLink), u.appendChild(o("/factory.html", "nav.factory", "factory")), u.appendChild(o("/initramfs.html", "nav.initramfs", "initramfs")), p.appendChild(u), u = document.createElement("div"), u.className = "nav-section", b = document.createElement("div"), b.className = "nav-section-title", b.setAttribute("data-i18n", "nav.system"), b.textContent = t("nav.system"), u.appendChild(b), u.appendChild(o("/backup.html", "nav.backup", "backup")), u.appendChild(o("/flash.html", "nav.flash", "flash")), u.appendChild(o("/env.html", "nav.env", "env")), u.appendChild(o("/console.html", "nav.console", "console")), r = o("/reboot.html", "nav.reboot", "reboot"), u.appendChild(r), p.appendChild(u), i.appendChild(p), applyI18n(i), updateGptNavVisibility(), updateSimgNavVisibility())
 }
 
 function ajax(n) {
@@ -474,8 +695,10 @@ function appInit(n) {
     setLang(APP_STATE.lang);
     ensureSidebar();
     ensureBranding();
+    ensureFavicon();
     applyI18n(document);
     updateDocumentTitle();
+    loadThemeColor();
     setTimeout(function () {
         document.body.classList.add("ready")
     }, 0);
