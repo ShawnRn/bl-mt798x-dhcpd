@@ -65,9 +65,9 @@ obj-y += main.o
 FILE_main.o := main.js
 FSPATH_main.o := main.js
 
-obj-y += colorloader.o
-FILE_colorloader.o := colorloader.js
-FSPATH_colorloader.o := colorloader.js
+obj-y += themeloader.o
+FILE_themeloader.o := themeloader.js
+FSPATH_themeloader.o := themeloader.js
 
 obj-y += reboot.o
 FILE_reboot.o := reboot.html

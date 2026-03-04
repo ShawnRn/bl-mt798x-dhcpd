@@ -23,6 +23,8 @@
 
 #define THEME_COLOR_ENV "failsafe_theme_color"
 #define THEME_COLOR_MAX_LEN 8
+#define THEME_MODE_ENV "failsafe_theme_mode"
+#define THEME_MODE_MAX_LEN 8
 
 static void failsafe_http_reply_json(struct httpd_response *response, int code,
 	const char *json)
@@ -80,7 +82,8 @@ static int failsafe_theme_normalize_hex(const char *in, char *out, size_t out_sz
 }
 
 static int theme_get_form_value(struct httpd_request *request,
-	const char *key, char **out, size_t max_len, bool allow_empty)
+	const char *key, char **out, size_t max_len, bool allow_empty,
+	bool allow_missing)
 {
 	struct httpd_form_value *v;
 	char *buf;
@@ -91,6 +94,10 @@ static int theme_get_form_value(struct httpd_request *request,
 
 	v = httpd_request_find_value(request, key);
 	if (!v || !v->data) {
+		if (allow_missing) {
+			*out = NULL;
+			return 0;
+		}
 		if (allow_empty) {
 			buf = strdup("");
 			if (!buf)
@@ -115,6 +122,14 @@ static int theme_get_form_value(struct httpd_request *request,
 	buf[n] = '\0';
 	*out = buf;
 	return 0;
+}
+
+static bool failsafe_theme_valid_mode(const char *mode)
+{
+	if (!mode || !mode[0])
+		return false;
+	return !strcmp(mode, "auto") || !strcmp(mode, "light") ||
+		!strcmp(mode, "dark");
 }
 
 static const char *failsafe_guess_content_type(const char *path)
@@ -209,8 +224,9 @@ void theme_get_handler(enum httpd_uri_handler_status status,
 	struct httpd_response *response)
 {
 	const char *val;
+	const char *theme;
 	char color[THEME_COLOR_MAX_LEN] = "";
-	static char resp[64];
+	static char resp[96];
 
 	if (status != HTTP_CB_NEW)
 		return;
@@ -222,11 +238,16 @@ void theme_get_handler(enum httpd_uri_handler_status status,
 	}
 
 	val = env_get(THEME_COLOR_ENV);
-	if (val && !failsafe_theme_normalize_hex(val, color, sizeof(color)))
-		snprintf(resp, sizeof(resp),
-			"{\"ok\":true,\"color\":\"%s\"}", color);
-	else
-		snprintf(resp, sizeof(resp), "{\"ok\":true,\"color\":\"\"}");
+	if (!val || failsafe_theme_normalize_hex(val, color, sizeof(color)))
+		color[0] = '\0';
+
+	theme = env_get(THEME_MODE_ENV);
+	if (!failsafe_theme_valid_mode(theme))
+		theme = "";
+
+	snprintf(resp, sizeof(resp),
+		"{\"ok\":true,\"color\":\"%s\",\"theme\":\"%s\"}",
+		color, theme ? theme : "");
 
 	failsafe_http_reply_json(response, 200, resp);
 }
@@ -236,8 +257,11 @@ void theme_set_handler(enum httpd_uri_handler_status status,
 	struct httpd_response *response)
 {
 	char *color = NULL;
+	char *theme = NULL;
 	char norm[THEME_COLOR_MAX_LEN];
 	int ret;
+	bool changed = false;
+	const char *err = NULL;
 
 	if (status != HTTP_CB_NEW)
 		return;
@@ -249,45 +273,81 @@ void theme_set_handler(enum httpd_uri_handler_status status,
 	}
 
 	ret = theme_get_form_value(request, "color", &color,
-		THEME_COLOR_MAX_LEN, true);
+		THEME_COLOR_MAX_LEN, true, true);
 	if (ret) {
 		failsafe_http_reply_json(response, 400,
 			"{\"ok\":false,\"error\":\"bad_color\"}");
 		return;
 	}
 
-	if (!color[0]) {
-		ret = env_set(THEME_COLOR_ENV, NULL);
-		if (!ret)
-			ret = env_save();
-		free(color);
-		if (ret) {
-			failsafe_http_reply_json(response, 500,
-				"{\"ok\":false,\"error\":\"save\"}");
-			return;
-		}
-		failsafe_http_reply_json(response, 200, "{\"ok\":true}");
-		return;
-	}
-
-	if (failsafe_theme_normalize_hex(color, norm, sizeof(norm))) {
+	ret = theme_get_form_value(request, "theme", &theme,
+		THEME_MODE_MAX_LEN, true, true);
+	if (ret) {
 		free(color);
 		failsafe_http_reply_json(response, 400,
-			"{\"ok\":false,\"error\":\"bad_color\"}");
+			"{\"ok\":false,\"error\":\"bad_theme\"}");
 		return;
 	}
 
-	ret = env_set(THEME_COLOR_ENV, norm);
-	if (!ret)
+	if (color) {
+		if (!color[0]) {
+			ret = env_set(THEME_COLOR_ENV, NULL);
+			if (ret)
+				goto out_free;
+			changed = true;
+		} else {
+			if (failsafe_theme_normalize_hex(color, norm, sizeof(norm))) {
+				ret = -EINVAL;
+				err = "bad_color";
+				goto out_free;
+			}
+			ret = env_set(THEME_COLOR_ENV, norm);
+			if (ret)
+				goto out_free;
+			changed = true;
+		}
+	}
+
+	if (theme) {
+		if (!theme[0]) {
+			ret = env_set(THEME_MODE_ENV, NULL);
+			if (ret)
+				goto out_free;
+			changed = true;
+		} else {
+			if (!failsafe_theme_valid_mode(theme)) {
+				ret = -EINVAL;
+				err = "bad_theme";
+				goto out_free;
+			}
+			ret = env_set(THEME_MODE_ENV, theme);
+			if (ret)
+				goto out_free;
+			changed = true;
+		}
+	}
+
+	if (changed) {
 		ret = env_save();
+		if (ret)
+			goto out_free;
+	}
 
 	free(color);
+	free(theme);
+	failsafe_http_reply_json(response, 200, "{\"ok\":true}");
+	return;
 
-	if (ret) {
+out_free:
+	free(color);
+	free(theme);
+	if (ret == -EINVAL) {
+		failsafe_http_reply_json(response, 400,
+			err && !strcmp(err, "bad_color") ?
+			"{\"ok\":false,\"error\":\"bad_color\"}" :
+			"{\"ok\":false,\"error\":\"bad_theme\"}");
+	}
+	else
 		failsafe_http_reply_json(response, 500,
 			"{\"ok\":false,\"error\":\"save\"}");
-		return;
-	}
-
-	failsafe_http_reply_json(response, 200, "{\"ok\":true}");
 }

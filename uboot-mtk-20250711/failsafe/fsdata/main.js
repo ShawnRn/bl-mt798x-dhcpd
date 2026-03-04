@@ -34,6 +34,12 @@ function isI18nAvailable() {
     return typeof I18N !== "undefined" && I18N
 }
 
+function normalizeThemeMode(n) {
+    if (!n) return "auto";
+    var t = String(n).toLowerCase().trim();
+    return t === "light" || t === "dark" || t === "auto" ? t : "auto";
+}
+
 function isI18nEnabled() {
     return APP_STATE.i18nEnabled !== false
 }
@@ -94,18 +100,30 @@ function setLang(n) {
     updateDocumentTitle()
 }
 
-function setTheme(n) {
-    APP_STATE.theme = n || "auto";
+function updateThemeSelect() {
+    var sel = document.getElementById("theme_select");
+    if (!sel) return;
+    sel.value = APP_STATE.theme || "auto";
+}
+
+function setTheme(n, opts) {
+    var o = opts || {};
+    var persistLocal = o.persistLocal !== false;
+    var persistEnv = o.persistEnv === true;
+    APP_STATE.theme = normalizeThemeMode(n || "auto");
     try {
-        localStorage.setItem("theme", APP_STATE.theme)
+        persistLocal && localStorage.setItem("theme", APP_STATE.theme)
     } catch (i) { }
     var t = document.documentElement;
-    APP_STATE.theme === "auto" ? t.removeAttribute("data-theme") : t.setAttribute("data-theme", APP_STATE.theme)
+    APP_STATE.theme === "auto" ? t.removeAttribute("data-theme") : t.setAttribute("data-theme", APP_STATE.theme);
+    updateThemeSelect();
+    persistEnv && saveThemeMode(APP_STATE.theme);
 }
 
 var THEME_COLOR_ENV_KEY = "failsafe_theme_color";
 var THEME_COLOR_CACHE_KEY = "failsafe_theme_color_cache";
 var ACCENT_PRESETS = ["#2563eb", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444", "#a855f7"];
+var THEME_MODE_ENV_KEY = "failsafe_theme_mode";
 
 function normalizeHexColor(input) {
     var s, hex;
@@ -213,6 +231,18 @@ async function saveThemeColor(color) {
     } catch (e) { }
 }
 
+async function saveThemeMode(theme) {
+    var norm = normalizeThemeMode(theme);
+    try {
+        localStorage.setItem("theme", norm);
+    } catch (e) { }
+    try {
+        var fd = new FormData();
+        fd.append("theme", norm);
+        await fetch("/theme/set", { method: "POST", body: fd });
+    } catch (e) { }
+}
+
 async function loadThemeColor() {
     var current = null;
     var fromEnv = false;
@@ -244,6 +274,21 @@ async function loadThemeColor() {
             } catch (e3) { }
         }
         updateAccentControls(current);
+    }
+}
+
+async function loadThemeMode() {
+    var mode = null;
+    try {
+        var r = await fetch("/theme/get", { method: "GET" });
+        if (r && r.ok) {
+            var j = await r.json();
+            if (j && j.theme) mode = normalizeThemeMode(j.theme);
+        }
+    } catch (e) { }
+
+    if (mode) {
+        setTheme(mode, { persistEnv: false, persistLocal: true });
     }
 }
 
@@ -360,7 +405,7 @@ function ensureSidebar() {
     i && i.getAttribute("data-rendered") !== "1" && (i.setAttribute("data-rendered", "1"), f = location && location.pathname ? location.pathname : "", f === "" && (f = "/"), i.innerHTML = "", k = document.createElement("div"), k.className = "sidebar-brand", s = document.createElement("div"), s.className = "title", s.setAttribute("data-i18n", "app.name"), s.textContent = t("app.name"), k.appendChild(s), i.appendChild(k), h = document.createElement("div"), h.className = "sidebar-controls", c = document.createElement("div"), c.className = "control-row", d = document.createElement("div"), d.setAttribute("data-i18n", "control.language"), d.textContent = t("control.language"), c.appendChild(d), r = document.createElement("select"), r.id = "lang_select", r.innerHTML = '<option value="en">English<\/option><option value="zh-cn">简体中文<\/option>', r.value = APP_STATE.lang, r.onchange = function () {
         setLang(this.value)
     }, c.appendChild(r), h.appendChild(c), l = document.createElement("div"), l.className = "control-row", g = document.createElement("div"), g.setAttribute("data-i18n", "control.theme"), g.textContent = t("control.theme"), l.appendChild(g), n = document.createElement("select"), n.id = "theme_select", a = document.createElement("option"), a.value = "auto", a.setAttribute("data-i18n", "theme.auto"), a.textContent = t("theme.auto"), v = document.createElement("option"), v.value = "light", v.setAttribute("data-i18n", "theme.light"), v.textContent = t("theme.light"), y = document.createElement("option"), y.value = "dark", y.setAttribute("data-i18n", "theme.dark"), y.textContent = t("theme.dark"), n.appendChild(a), n.appendChild(v), n.appendChild(y), n.value = APP_STATE.theme, n.onchange = function () {
-        setTheme(this.value)
+        setTheme(this.value, { persistEnv: true, persistLocal: true })
     }, l.appendChild(n), h.appendChild(l), appendAccentControls(h), i.appendChild(h), p = document.createElement("div"), p.className = "nav", e = document.createElement("div"), e.className = "nav-section", w = document.createElement("div"), w.className = "nav-section-title", w.setAttribute("data-i18n", "nav.basic"), w.textContent = t("nav.basic"), e.appendChild(w), e.appendChild(o("/", "nav.firmware", "firmware")), e.appendChild(o("/uboot.html", "nav.uboot", "uboot")), p.appendChild(e), u = document.createElement("div"), u.className = "nav-section", b = document.createElement("div"), b.className = "nav-section-title", b.setAttribute("data-i18n", "nav.advanced"), b.textContent = t("nav.advanced"), u.appendChild(b), u.appendChild(o("/bl2.html", "nav.bl2", "bl2")), gptLink = o("/gpt.html", "nav.gpt", "gpt"), gptLink.style.display = "none", u.appendChild(gptLink), simgLink = o("/simg.html", "nav.simg", "simg"), simgLink.style.display = "none", u.appendChild(simgLink), u.appendChild(o("/factory.html", "nav.factory", "factory")), u.appendChild(o("/initramfs.html", "nav.initramfs", "initramfs")), p.appendChild(u), u = document.createElement("div"), u.className = "nav-section", b = document.createElement("div"), b.className = "nav-section-title", b.setAttribute("data-i18n", "nav.system"), b.textContent = t("nav.system"), u.appendChild(b), u.appendChild(o("/backup.html", "nav.backup", "backup")), u.appendChild(o("/flash.html", "nav.flash", "flash")), u.appendChild(o("/env.html", "nav.env", "env")), u.appendChild(o("/console.html", "nav.console", "console")), r = o("/reboot.html", "nav.reboot", "reboot"), u.appendChild(r), p.appendChild(u), i.appendChild(p), applyI18n(i), updateGptNavVisibility(), updateSimgNavVisibility())
 }
 
@@ -691,7 +736,7 @@ function appInit(n) {
     APP_STATE.i18nEnabled = isI18nAvailable();
     APP_STATE.lang = detectLang();
     APP_STATE.theme = detectTheme();
-    setTheme(APP_STATE.theme);
+    setTheme(APP_STATE.theme, { persistEnv: false, persistLocal: true });
     setLang(APP_STATE.lang);
     ensureSidebar();
     ensureBranding();
@@ -699,6 +744,7 @@ function appInit(n) {
     applyI18n(document);
     updateDocumentTitle();
     loadThemeColor();
+    loadThemeMode();
     setTimeout(function () {
         document.body.classList.add("ready")
     }, 0);
