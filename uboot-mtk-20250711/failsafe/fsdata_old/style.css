@@ -134,6 +134,18 @@ ul {
 	background-color: #0688fa;
 }
 
+.button.button-danger {
+	box-shadow: inset 0px -3px 7px 0px #f87171;
+	background: linear-gradient(to bottom, #ef4444 5%, #dc2626 100%);
+	background-color: #ef4444;
+	border: 1px solid #7f1d1d;
+}
+
+.button.button-danger:hover {
+	background: linear-gradient(to bottom, #dc2626 5%, #ef4444 100%);
+	background-color: #dc2626;
+}
+
 .console-output {
 	margin: 10px auto;
 	padding: 10px;

@@ -743,6 +743,8 @@ static void js_handler(enum httpd_uri_handler_status status,
 
 		if (uri && strstr(uri, "i18n.js"))
 			file = "i18n.js";
+		else if (uri && strstr(uri, "theme-early.js"))
+			file = "theme-early.js";
 
 		output_plain_file(response, file);
 		response->info.content_type = "text/javascript";
@@ -839,7 +841,9 @@ int start_web_failsafe(void)
 		httpd_register_uri_handler(inst, "/gpt.html", &html_handler, NULL);
 #endif
 	httpd_register_uri_handler(inst, "/initramfs.html", &html_handler, NULL);
+	httpd_register_uri_handler(inst, "/favicon.svg", &picture_handler, NULL);
 	httpd_register_uri_handler(inst, "/main.js", &js_handler, NULL);
+	httpd_register_uri_handler(inst, "/themeloader.js", &js_handler, NULL);
 	httpd_register_uri_handler(inst, "/result", &result_handler, NULL);
 	httpd_register_uri_handler(inst, "/style.css", &style_handler, NULL);
 	httpd_register_uri_handler(inst, "/uboot.html", &html_handler, NULL);
@@ -862,6 +866,7 @@ int start_web_failsafe(void)
 	httpd_register_uri_handler(inst, "/flash.html", &html_handler, NULL);
 	httpd_register_uri_handler(inst, "/flash/read", &flash_handler, NULL);
 	httpd_register_uri_handler(inst, "/flash/write", &flash_handler, NULL);
+	httpd_register_uri_handler(inst, "/flash/erase", &flash_handler, NULL);
 	httpd_register_uri_handler(inst, "/flash/restore", &flash_handler, NULL);
 #endif
 #ifdef CONFIG_WEBUI_FAILSAFE_ENV
@@ -871,6 +876,8 @@ int start_web_failsafe(void)
 	httpd_register_uri_handler(inst, "/env/unset", &env_unset_handler, NULL);
 	httpd_register_uri_handler(inst, "/env/reset", &env_reset_handler, NULL);
 	httpd_register_uri_handler(inst, "/env/restore", &env_restore_handler, NULL);
+	httpd_register_uri_handler(inst, "/theme/get", &theme_get_handler, NULL);
+	httpd_register_uri_handler(inst, "/theme/set", &theme_set_handler, NULL);
 #endif
 #ifdef CONFIG_WEBUI_FAILSAFE_SIMG
 	httpd_register_uri_handler(inst, "/simg.html", &html_handler, NULL);

@@ -57,9 +57,17 @@ obj-$(CONFIG_WEBUI_FAILSAFE_I18N) += i18n.o
 FILE_i18n.o := i18n.js
 FSPATH_i18n.o := i18n.js
 
+obj-y += favicon.o
+FILE_favicon.o := favicon.svg
+FSPATH_favicon.o := favicon.svg
+
 obj-y += main.o
 FILE_main.o := main.js
 FSPATH_main.o := main.js
+
+obj-y += themeloader.o
+FILE_themeloader.o := themeloader.js
+FSPATH_themeloader.o := themeloader.js
 
 obj-y += reboot.o
 FILE_reboot.o := reboot.html
@@ -106,5 +114,9 @@ $(obj)/%.o: $(src)/%.css FORCE
 	$(call if_changed_dep,as_o_html)
 
 $(obj)/%.o: $(src)/%.js FORCE
+	$(call cmd,force_checksrc)
+	$(call if_changed_dep,as_o_html)
+
+$(obj)/%.o: $(src)/%.svg FORCE
 	$(call cmd,force_checksrc)
 	$(call if_changed_dep,as_o_html)

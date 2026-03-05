@@ -51,8 +51,12 @@ sudo apt install gcc-aarch64-linux-gnu build-essential flex bison libssl-dev dev
 
 ```bash
 chmod +x build.sh
+# mt7981, emmc device
 BOARD=sn_r1 VERSION=2025 ./build.sh
+# mt7981, spi-nand device, multi-layout device
 BOARD=cmcc_a10 VERSION=2025 MULTI_LAYOUT=1 ./build.sh
+# mt7986, spi-nand device, multi-layout device, single image upgrade support
+BOARD=ruijie_rg-x60-new MULTI_LAYOUT=1 SIMG=1 ./build.sh
 ```
 
 - SOC=mt7981/mt7986 (auto detected. Optional)
@@ -60,6 +64,7 @@ BOARD=cmcc_a10 VERSION=2025 MULTI_LAYOUT=1 ./build.sh
 - MULTI_LAYOUT (default: 0. Optional, only for multi-layout devices, e.g. xiaomi-wr30u, redmi-ax6000)
 - FIXED_MTDPARTS (default: 1. Optional, if set to 0, for nand device, the mtdparts will be editiable, but it may cause some issues if you don't know what you are doing)
 - VARIANT=default/ubootmod/nonmbm (default: default. Optional, for different firmware variants, e.g. OpenWrt/ImmortalWrt stock firmware(usually enable NMBM), OpenWrt/ImmortalWrt U-Boot layout firmware, NMBM disabled firmware, etc.)
+- SIMG=0/1 (default: 0. Optional, if set to 1, the failsafe will support single image upgrade, but it may cause some issues if you don't know what you are doing)
 
 > CAN'T ENABLE MULTI_LAYOUT=1 and FIXED_MTDPARTS=0 at the same time
 
@@ -71,8 +76,29 @@ BOARD=cmcc_a10 VERSION=2025 MULTI_LAYOUT=1 ./build.sh
 | 2023 | 20231013-0ea67d76a | 20230718-09eda825 |
 | 2024 | 20240117-bacca82a8 | 20230718-09eda825 |
 | 2025 | 20250711 | 20250711 |
+| SP1 | 20241017-bacca82a8 | 20250711 |
+
+> SP1 is a special version based on 2025, with some features backported from 2024. For some mt7986 devices, still use the kernel 5.4 firmware, may cause some issues on version 2025, like hwrng worong, in this case, you can try SP1.
 
 Generated files will be in the `output`
+
+## Use Actions to build
+
+- [x] Build FIP
+  - [x] single-board/all/all-mt798x
+  - [x] Version 2022/2023/2024/2025/2026/SP1/all
+  - [ ] VARIANT
+  - [ ] Extra Options
+  - [ ] Custom DHCPD
+  > VERSION:all only for single-board
+- [x] Build GPT
+  - [x] Official layout
+  - [ ] Custom layout
+- [x] Build BL2
+  - [x] RAMBOOT
+  - [ ] OC profiles
+
+> Although you can customize the DHCPD subnet, the mask is fixed to "255.255.255.0", but not recommend, because you need synchronous change your board configs.
 
 ## Generate GPT with python2.7
 
@@ -121,16 +147,34 @@ Then run:
 DRAW=1 ./generate_gpt.sh
 ```
 
-## Use Action to build
+## Compile ATF
 
-- [x] Build FIP
-- [ ] Build GPT (Only gpt.json exists)
-- [ ] Build BL2 (Normal)
-- [ ] Build BL2 (Overclocking)
-- [ ] Multi-layout support (Only for multi-layout devices)
-- [ ] Special subnet support (Custom default IP for DHCPD)
+```bash
+chmod +x compile_atf.sh
+./compile_atf.sh
+```
 
-> Although you can customize the DHCPD subnet, the mask is fixed to "255.255.255.0", so you must ensure your device is in this subnet.
+then will generate BL2 in the `output` directory. Normally, it will generate ramboot BL2.
+
+### Overclocking profiles
+
+- For mt7981, now support OC to 1.4GHz~1.8GHz, and the OC profiles are in the `mt798x_atf/mt7981` directory.
+
+  e.g. to build the 1.6GHz OC BL2 you need configure:
+
+  ```makefile
+  MT7981_ARMPLL_FREQ_1600=y
+  ```
+
+- For mt7986, now support OC to 2.5GHz, or underclock to 1.6GHz, and the OC profiles are in the `mt798x_atf/mt7986` directory.
+
+  e.g. to build the 2.3GHz OC BL2 you need configure:
+
+  ```makefile
+  MT7986_ARMPLL_FREQ_2300=y
+  ```
+
+> Limit each adjustment to 100MHz
 
 ---
 

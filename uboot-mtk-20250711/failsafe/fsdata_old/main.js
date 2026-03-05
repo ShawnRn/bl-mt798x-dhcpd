@@ -603,6 +603,75 @@ function flashSelectTargetOld(val) {
     return false;
 }
 
+function flashGetDeviceNameOld(storage) {
+    var bi = window.APP_STATE && window.APP_STATE.backupinfo ? window.APP_STATE.backupinfo : null;
+    var mmcName = '';
+    var mtdName = '';
+    if (bi && bi.mmc && bi.mmc.present) {
+        mmcName = [bi.mmc.vendor || '', bi.mmc.product || ''].join(' ').trim();
+        if (!mmcName) mmcName = 'MMC';
+    }
+    if (bi && bi.mtd && bi.mtd.present) {
+        mtdName = (bi.mtd.model || '').trim();
+        if (!mtdName) mtdName = 'MTD';
+    }
+    if (storage === 'mtd') return mtdName || 'MTD';
+    if (storage === 'mmc') return mmcName || 'MMC';
+    return mtdName || mmcName || 'device';
+}
+
+function flashBuildErasePlanOld() {
+    var target = document.getElementById('flash_target');
+    var startEl = document.getElementById('flash_start');
+    var endEl = document.getElementById('flash_end');
+    var v, seg, storage, tname, isRaw, startStr, endStr, hasStart, hasEnd, start, end;
+    var detail, targetLabel;
+
+    if (!target || !target.value)
+        return { error: 'Please select a target' };
+
+    v = String(target.value);
+    seg = v.split(':');
+    storage = seg.length > 1 ? seg[0] : 'auto';
+    tname = seg.length > 1 ? seg.slice(1).join(':') : v;
+    isRaw = tname === 'raw';
+
+    startStr = startEl && startEl.value ? String(startEl.value).trim() : '';
+    endStr = endEl && endEl.value ? String(endEl.value).trim() : '';
+    hasStart = !!startStr;
+    hasEnd = !!endStr;
+
+    if (hasStart !== hasEnd)
+        return { error: 'Please input valid start/end' };
+
+    if (hasStart && hasEnd) {
+        start = parseUserLenOld(startStr);
+        end = parseUserLenOld(endStr);
+        if (start === null || end === null || end <= start)
+            return { error: 'Please input valid start/end' };
+    }
+
+    if (isRaw && !hasStart)
+        return { error: 'Please input valid start/end (raw target requires range)' };
+
+    targetLabel = isRaw ? '' : (tname + ' partition');
+    if (hasStart)
+        detail = isRaw ? ('0x' + start.toString(16) + '~0x' + end.toString(16)) :
+            (targetLabel + ' is 0x' + start.toString(16) + '~0x' + end.toString(16));
+    else
+        detail = targetLabel;
+
+    return {
+        storage: storage,
+        target: v,
+        hasRange: hasStart,
+        start: hasStart ? start : null,
+        end: hasStart ? end : null,
+        detail: detail,
+        deviceName: flashGetDeviceNameOld(storage)
+    };
+}
+
 function flashInitOld() {
     getversion();
 
@@ -735,6 +804,54 @@ async function flashWriteOld() {
         var j;
         try { j = JSON.parse(txt); } catch (e) { setFlashStatusOld('Parse error'); return; }
         if (!j || !j.ok) { setFlashStatusOld('Error: ' + (j && j.error ? j.error : '')); return; }
+        setFlashStatusOld('Done.');
+    } catch (e) {
+        setFlashStatusOld('Error: ' + (e && e.message ? e.message : String(e)));
+    }
+}
+
+async function flashEraseOld() {
+    var plan = flashBuildErasePlanOld();
+    if (plan.error) {
+        alert(plan.error);
+        return;
+    }
+
+    if (!confirm('Erase flash data now? This is dangerous.'))
+        return;
+
+    if (!confirm('Will erase [' + plan.deviceName + '] ' + plan.detail + ' confirm again?'))
+        return;
+
+    try {
+        setFlashStatusOld('Erasing...');
+        var fd = new FormData();
+        fd.append('op', 'erase');
+        fd.append('storage', 'auto');
+        fd.append('target', plan.target);
+        if (plan.hasRange) {
+            fd.append('start', '0x' + plan.start.toString(16));
+            fd.append('end', '0x' + plan.end.toString(16));
+        }
+
+        var r = await fetch('/flash/erase', { method: 'POST', body: fd });
+        var txt = await r.text();
+        if (!r.ok) {
+            setFlashStatusOld('HTTP error: ' + r.status + (txt ? ': ' + txt : ''));
+            return;
+        }
+
+        var j;
+        try { j = JSON.parse(txt); } catch (e) {
+            setFlashStatusOld('Parse error');
+            return;
+        }
+
+        if (!j || !j.ok) {
+            setFlashStatusOld('Error: ' + (j && j.error ? j.error : ''));
+            return;
+        }
+
         setFlashStatusOld('Done.');
     } catch (e) {
         setFlashStatusOld('Error: ' + (e && e.message ? e.message : String(e)));

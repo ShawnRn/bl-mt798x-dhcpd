@@ -34,6 +34,12 @@ function isI18nAvailable() {
     return typeof I18N !== "undefined" && I18N
 }
 
+function normalizeThemeMode(n) {
+    if (!n) return "auto";
+    var t = String(n).toLowerCase().trim();
+    return t === "light" || t === "dark" || t === "auto" ? t : "auto";
+}
+
 function isI18nEnabled() {
     return APP_STATE.i18nEnabled !== false
 }
@@ -94,13 +100,273 @@ function setLang(n) {
     updateDocumentTitle()
 }
 
-function setTheme(n) {
-    APP_STATE.theme = n || "auto";
+function updateThemeSelect() {
+    var sel = document.getElementById("theme_select");
+    if (!sel) return;
+    sel.value = APP_STATE.theme || "auto";
+}
+
+function setTheme(n, opts) {
+    var o = opts || {};
+    var persistLocal = o.persistLocal !== false;
+    var persistEnv = o.persistEnv === true;
+    APP_STATE.theme = normalizeThemeMode(n || "auto");
     try {
-        localStorage.setItem("theme", APP_STATE.theme)
+        persistLocal && localStorage.setItem("theme", APP_STATE.theme)
     } catch (i) { }
     var t = document.documentElement;
-    APP_STATE.theme === "auto" ? t.removeAttribute("data-theme") : t.setAttribute("data-theme", APP_STATE.theme)
+    APP_STATE.theme === "auto" ? t.removeAttribute("data-theme") : t.setAttribute("data-theme", APP_STATE.theme);
+    updateThemeSelect();
+    persistEnv && saveThemeMode(APP_STATE.theme);
+}
+
+var THEME_COLOR_ENV_KEY = "failsafe_theme_color";
+var THEME_COLOR_CACHE_KEY = "failsafe_theme_color_cache";
+var ACCENT_PRESETS = ["#2563eb", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444", "#a855f7"];
+var THEME_MODE_ENV_KEY = "failsafe_theme_mode";
+
+function normalizeHexColor(input) {
+    var s, hex;
+    if (!input) return null;
+    s = String(input).trim();
+    if (s === "") return null;
+    if (s[0] === "#") s = s.slice(1);
+    if (!/^[0-9a-fA-F]{3}$/.test(s) && !/^[0-9a-fA-F]{6}$/.test(s)) return null;
+    if (s.length === 3) {
+        hex = "#" + s[0] + s[0] + s[1] + s[1] + s[2] + s[2];
+    } else {
+        hex = "#" + s;
+    }
+    return hex.toLowerCase();
+}
+
+function hexToRgb(hex) {
+    var n = normalizeHexColor(hex);
+    if (!n) return null;
+    return {
+        r: parseInt(n.slice(1, 3), 16),
+        g: parseInt(n.slice(3, 5), 16),
+        b: parseInt(n.slice(5, 7), 16)
+    };
+}
+
+function applyAccentVars(color) {
+    var norm = normalizeHexColor(color);
+    var rgb, root, lighter;
+    if (!norm) return false;
+    rgb = hexToRgb(norm);
+    if (!rgb) return false;
+    root = document.documentElement;
+    root.style.setProperty("--primary", norm);
+    root.style.setProperty("--primary-rgb", rgb.r + ", " + rgb.g + ", " + rgb.b);
+    lighter = blendColor(norm, "#ffffff", 0.28);
+    root.style.setProperty("--primary-2", lighter);
+    ensureThemeColorMeta(norm);
+    return true;
+}
+
+function blendColor(hex, targetHex, t) {
+    var a = hexToRgb(hex);
+    var b = hexToRgb(targetHex);
+    if (!a || !b) return hex;
+    var r = Math.round(a.r + (b.r - a.r) * t);
+    var g = Math.round(a.g + (b.g - a.g) * t);
+    var b2 = Math.round(a.b + (b.b - a.b) * t);
+    return "#" + r.toString(16).padStart(2, "0") + g.toString(16).padStart(2, "0") + b2.toString(16).padStart(2, "0");
+}
+
+function ensureThemeColorMeta(color) {
+    if (!color) return;
+    var meta = document.querySelector("meta[name='theme-color']");
+    if (!meta) {
+        meta = document.createElement("meta");
+        meta.setAttribute("name", "theme-color");
+        document.head && document.head.appendChild(meta);
+    }
+    meta.setAttribute("content", color);
+}
+
+function updateAccentControls(color) {
+    var picker = document.getElementById("accent_color_picker");
+    var input = document.getElementById("accent_color_input");
+    var norm = normalizeHexColor(color);
+    var swatches, i, sw;
+    if (picker && norm) picker.value = norm;
+    if (input && norm) input.value = norm;
+    swatches = document.querySelectorAll(".color-swatch");
+    for (i = 0; i < swatches.length; i++) {
+        sw = swatches[i];
+        if (!sw || !sw.dataset) continue;
+        if (norm && String(sw.dataset.color || "").toLowerCase() === norm)
+            sw.classList.add("active");
+        else
+            sw.classList.remove("active");
+    }
+}
+
+function applyAccentColor(color) {
+    var ok = applyAccentVars(color);
+    if (!ok) return false;
+    updateAccentControls(color);
+    return true;
+}
+
+(function applyAccentFromCache() {
+    try {
+        var cached = localStorage.getItem(THEME_COLOR_CACHE_KEY);
+        if (cached) applyAccentVars(cached);
+    } catch (e) { }
+})();
+
+async function saveThemeColor(color) {
+    var norm = normalizeHexColor(color);
+    if (!norm) return;
+    try {
+        localStorage.setItem(THEME_COLOR_CACHE_KEY, norm);
+    } catch (e) { }
+    try {
+        var fd = new FormData();
+        fd.append("color", norm);
+        await fetch("/theme/set", { method: "POST", body: fd });
+    } catch (e) { }
+}
+
+async function saveThemeMode(theme) {
+    var norm = normalizeThemeMode(theme);
+    try {
+        localStorage.setItem("theme", norm);
+    } catch (e) { }
+    try {
+        var fd = new FormData();
+        fd.append("theme", norm);
+        await fetch("/theme/set", { method: "POST", body: fd });
+    } catch (e) { }
+}
+
+async function loadThemeColor() {
+    var current = null;
+    var fromEnv = false;
+    try {
+        var r = await fetch("/theme/get", { method: "GET" });
+        if (r && r.ok) {
+            var j = await r.json();
+            if (j && j.color) {
+                current = normalizeHexColor(j.color);
+                fromEnv = !!current;
+            }
+        }
+    } catch (e) { }
+
+    if (!current) {
+        try {
+            current = (getComputedStyle(document.documentElement)
+                .getPropertyValue("--primary") || "").trim();
+            current = normalizeHexColor(current);
+        } catch (e2) { }
+    }
+
+    if (current) {
+        if (fromEnv)
+            applyAccentColor(current);
+        if (fromEnv) {
+            try {
+                localStorage.setItem(THEME_COLOR_CACHE_KEY, current);
+            } catch (e3) { }
+        }
+        updateAccentControls(current);
+    }
+}
+
+async function loadThemeMode() {
+    var mode = null;
+    try {
+        var r = await fetch("/theme/get", { method: "GET" });
+        if (r && r.ok) {
+            var j = await r.json();
+            if (j && j.theme) mode = normalizeThemeMode(j.theme);
+        }
+    } catch (e) { }
+
+    if (mode) {
+        setTheme(mode, { persistEnv: false, persistLocal: true });
+    }
+}
+
+function appendAccentControls(container) {
+    if (!container) return;
+
+    var row = document.createElement("div");
+    row.className = "control-row control-row-color";
+
+    var label = document.createElement("div");
+    label.setAttribute("data-i18n", "control.accent");
+    label.textContent = t("control.accent");
+    row.appendChild(label);
+
+    var picker = document.createElement("div");
+    picker.className = "color-picker";
+
+    var presets = document.createElement("div");
+    presets.className = "color-presets";
+    ACCENT_PRESETS.forEach(function (c) {
+        var sw = document.createElement("button");
+        sw.type = "button";
+        sw.className = "color-swatch";
+        sw.dataset.color = c.toLowerCase();
+        sw.style.backgroundColor = c;
+        sw.onclick = function () {
+            applyAccentColor(c);
+            saveThemeColor(c);
+        };
+        presets.appendChild(sw);
+    });
+
+    var inputs = document.createElement("div");
+    inputs.className = "color-inputs";
+
+    var text = document.createElement("input");
+    text.type = "text";
+    text.id = "accent_color_input";
+    text.setAttribute("data-i18n-attr", "placeholder:theme.color.placeholder");
+    text.placeholder = t("theme.color.placeholder");
+    text.addEventListener("change", function () {
+        var norm = normalizeHexColor(text.value);
+        if (!norm) return;
+        applyAccentColor(norm);
+        saveThemeColor(norm);
+    });
+
+    var color = document.createElement("input");
+    color.type = "color";
+    color.id = "accent_color_picker";
+    color.setAttribute("data-i18n-attr", "title:theme.color.custom");
+    color.title = t("theme.color.custom");
+    color.addEventListener("input", function () {
+        applyAccentColor(color.value);
+        saveThemeColor(color.value);
+    });
+
+    inputs.appendChild(text);
+    inputs.appendChild(color);
+
+    picker.appendChild(presets);
+    picker.appendChild(inputs);
+
+    row.appendChild(picker);
+    container.appendChild(row);
+}
+
+function ensureFavicon() {
+    var link = document.querySelector("link[rel='icon']");
+    if (!link) {
+        link = document.createElement("link");
+        link.setAttribute("rel", "icon");
+        link.setAttribute("type", "image/svg+xml");
+        link.setAttribute("href", "/favicon.svg");
+        document.head && document.head.appendChild(link);
+    } else {
+        link.setAttribute("href", "/favicon.svg");
+    }
 }
 
 function updateDocumentTitle() {
@@ -139,8 +405,8 @@ function ensureSidebar() {
     i && i.getAttribute("data-rendered") !== "1" && (i.setAttribute("data-rendered", "1"), f = location && location.pathname ? location.pathname : "", f === "" && (f = "/"), i.innerHTML = "", k = document.createElement("div"), k.className = "sidebar-brand", s = document.createElement("div"), s.className = "title", s.setAttribute("data-i18n", "app.name"), s.textContent = t("app.name"), k.appendChild(s), i.appendChild(k), h = document.createElement("div"), h.className = "sidebar-controls", c = document.createElement("div"), c.className = "control-row", d = document.createElement("div"), d.setAttribute("data-i18n", "control.language"), d.textContent = t("control.language"), c.appendChild(d), r = document.createElement("select"), r.id = "lang_select", r.innerHTML = '<option value="en">English<\/option><option value="zh-cn">简体中文<\/option>', r.value = APP_STATE.lang, r.onchange = function () {
         setLang(this.value)
     }, c.appendChild(r), h.appendChild(c), l = document.createElement("div"), l.className = "control-row", g = document.createElement("div"), g.setAttribute("data-i18n", "control.theme"), g.textContent = t("control.theme"), l.appendChild(g), n = document.createElement("select"), n.id = "theme_select", a = document.createElement("option"), a.value = "auto", a.setAttribute("data-i18n", "theme.auto"), a.textContent = t("theme.auto"), v = document.createElement("option"), v.value = "light", v.setAttribute("data-i18n", "theme.light"), v.textContent = t("theme.light"), y = document.createElement("option"), y.value = "dark", y.setAttribute("data-i18n", "theme.dark"), y.textContent = t("theme.dark"), n.appendChild(a), n.appendChild(v), n.appendChild(y), n.value = APP_STATE.theme, n.onchange = function () {
-        setTheme(this.value)
-    }, l.appendChild(n), h.appendChild(l), i.appendChild(h), p = document.createElement("div"), p.className = "nav", e = document.createElement("div"), e.className = "nav-section", w = document.createElement("div"), w.className = "nav-section-title", w.setAttribute("data-i18n", "nav.basic"), w.textContent = t("nav.basic"), e.appendChild(w), e.appendChild(o("/", "nav.firmware", "firmware")), e.appendChild(o("/uboot.html", "nav.uboot", "uboot")), p.appendChild(e), u = document.createElement("div"), u.className = "nav-section", b = document.createElement("div"), b.className = "nav-section-title", b.setAttribute("data-i18n", "nav.advanced"), b.textContent = t("nav.advanced"), u.appendChild(b), u.appendChild(o("/bl2.html", "nav.bl2", "bl2")), gptLink = o("/gpt.html", "nav.gpt", "gpt"), gptLink.style.display = "none", u.appendChild(gptLink), simgLink = o("/simg.html", "nav.simg", "simg"), simgLink.style.display = "none", u.appendChild(simgLink), u.appendChild(o("/factory.html", "nav.factory", "factory")), u.appendChild(o("/initramfs.html", "nav.initramfs", "initramfs")), p.appendChild(u), u = document.createElement("div"), u.className = "nav-section", b = document.createElement("div"), b.className = "nav-section-title", b.setAttribute("data-i18n", "nav.system"), b.textContent = t("nav.system"), u.appendChild(b), u.appendChild(o("/backup.html", "nav.backup", "backup")), u.appendChild(o("/flash.html", "nav.flash", "flash")), u.appendChild(o("/env.html", "nav.env", "env")), u.appendChild(o("/console.html", "nav.console", "console")), r = o("/reboot.html", "nav.reboot", "reboot"), u.appendChild(r), p.appendChild(u), i.appendChild(p), applyI18n(i), updateGptNavVisibility(), updateSimgNavVisibility())
+        setTheme(this.value, { persistEnv: true, persistLocal: true })
+    }, l.appendChild(n), h.appendChild(l), appendAccentControls(h), i.appendChild(h), p = document.createElement("div"), p.className = "nav", e = document.createElement("div"), e.className = "nav-section", w = document.createElement("div"), w.className = "nav-section-title", w.setAttribute("data-i18n", "nav.basic"), w.textContent = t("nav.basic"), e.appendChild(w), e.appendChild(o("/", "nav.firmware", "firmware")), e.appendChild(o("/uboot.html", "nav.uboot", "uboot")), p.appendChild(e), u = document.createElement("div"), u.className = "nav-section", b = document.createElement("div"), b.className = "nav-section-title", b.setAttribute("data-i18n", "nav.advanced"), b.textContent = t("nav.advanced"), u.appendChild(b), u.appendChild(o("/bl2.html", "nav.bl2", "bl2")), gptLink = o("/gpt.html", "nav.gpt", "gpt"), gptLink.style.display = "none", u.appendChild(gptLink), simgLink = o("/simg.html", "nav.simg", "simg"), simgLink.style.display = "none", u.appendChild(simgLink), u.appendChild(o("/factory.html", "nav.factory", "factory")), u.appendChild(o("/initramfs.html", "nav.initramfs", "initramfs")), p.appendChild(u), u = document.createElement("div"), u.className = "nav-section", b = document.createElement("div"), b.className = "nav-section-title", b.setAttribute("data-i18n", "nav.system"), b.textContent = t("nav.system"), u.appendChild(b), u.appendChild(o("/backup.html", "nav.backup", "backup")), u.appendChild(o("/flash.html", "nav.flash", "flash")), u.appendChild(o("/env.html", "nav.env", "env")), u.appendChild(o("/console.html", "nav.console", "console")), r = o("/reboot.html", "nav.reboot", "reboot"), u.appendChild(r), p.appendChild(u), i.appendChild(p), applyI18n(i), updateGptNavVisibility(), updateSimgNavVisibility())
 }
 
 function ajax(n) {
@@ -470,12 +736,15 @@ function appInit(n) {
     APP_STATE.i18nEnabled = isI18nAvailable();
     APP_STATE.lang = detectLang();
     APP_STATE.theme = detectTheme();
-    setTheme(APP_STATE.theme);
+    setTheme(APP_STATE.theme, { persistEnv: false, persistLocal: true });
     setLang(APP_STATE.lang);
     ensureSidebar();
     ensureBranding();
+    ensureFavicon();
     applyI18n(document);
     updateDocumentTitle();
+    loadThemeColor();
+    loadThemeMode();
     setTimeout(function () {
         document.body.classList.add("ready")
     }, 0);
@@ -1069,6 +1338,75 @@ function flashSelectTarget(val) {
     return false
 }
 
+function flashGetDeviceNameByStorage(storage) {
+    var bi = APP_STATE && APP_STATE.backupinfo ? APP_STATE.backupinfo : null;
+    var mmcName = "";
+    var mtdName = "";
+    if (bi && bi.mmc && bi.mmc.present) {
+        mmcName = [bi.mmc.vendor || "", bi.mmc.product || ""].join(" ").trim();
+        if (!mmcName) mmcName = "MMC";
+    }
+    if (bi && bi.mtd && bi.mtd.present) {
+        mtdName = (bi.mtd.model || "").trim();
+        if (!mtdName) mtdName = "MTD";
+    }
+    if (storage === "mtd") return mtdName || "MTD";
+    if (storage === "mmc") return mmcName || "MMC";
+    return mtdName || mmcName || "device";
+}
+
+function flashBuildErasePlan() {
+    var target = document.getElementById("flash_target");
+    var startEl = document.getElementById("flash_start");
+    var endEl = document.getElementById("flash_end");
+    var v, seg, storage, tname, isRaw, startStr, endStr, hasStart, hasEnd, start, end;
+    var targetLabel, detail;
+
+    if (!target || !target.value)
+        return { error: t("flash.error.no_target") };
+
+    v = String(target.value);
+    seg = v.split(":");
+    storage = seg.length > 1 ? seg[0] : "auto";
+    tname = seg.length > 1 ? seg.slice(1).join(":") : v;
+    isRaw = tname === "raw";
+
+    startStr = startEl && startEl.value ? String(startEl.value).trim() : "";
+    endStr = endEl && endEl.value ? String(endEl.value).trim() : "";
+    hasStart = !!startStr;
+    hasEnd = !!endStr;
+
+    if (hasStart !== hasEnd)
+        return { error: t("flash.error.bad_range") };
+
+    if (hasStart && hasEnd) {
+        start = parseUserLen(startStr);
+        end = parseUserLen(endStr);
+        if (start === null || end === null || end <= start)
+            return { error: t("flash.error.bad_range") };
+    }
+
+    if (isRaw && !hasStart)
+        return { error: t("flash.error.bad_range") + " (raw target requires start/end)" };
+
+    targetLabel = isRaw ? "" : (tname + " 分区");
+    if (hasStart)
+        detail = isRaw ? ("0x" + start.toString(16) + "~0x" + end.toString(16)) :
+            (targetLabel + " 的 0x" + start.toString(16) + "~0x" + end.toString(16));
+    else
+        detail = targetLabel;
+
+    return {
+        storage: storage,
+        target: v,
+        hasRange: hasStart,
+        start: hasStart ? start : null,
+        end: hasStart ? end : null,
+        detail: detail,
+        deviceName: flashGetDeviceNameByStorage(storage)
+    };
+}
+
 function flashInit() {
     var target = document.getElementById("flash_target");
     var start = document.getElementById("flash_start");
@@ -1222,6 +1560,59 @@ async function flashWrite() {
         flashSetStatus(t("flash.status.done"))
     } catch (e) {
         flashSetStatus(t("flash.status.error") + " " + (e && e.message ? e.message : String(e)))
+    }
+}
+
+async function flashErase() {
+    var plan = flashBuildErasePlan();
+    var fd, r, txt, j;
+
+    if (plan.error) {
+        alert(plan.error);
+        return;
+    }
+
+    if (!confirm(t("flash.confirm.erase")))
+        return;
+
+    var confirmDetail = t("flash.confirm.erase_detail")
+        .replace("{device}", plan.deviceName)
+        .replace("{detail}", plan.detail);
+
+    if (!confirm(confirmDetail))
+        return;
+
+    try {
+        flashSetStatus(t("flash.status.erasing"));
+        fd = new FormData();
+        fd.append("op", "erase");
+        fd.append("storage", "auto");
+        fd.append("target", plan.target);
+        if (plan.hasRange) {
+            fd.append("start", "0x" + plan.start.toString(16));
+            fd.append("end", "0x" + plan.end.toString(16));
+        }
+
+        r = await fetch("/flash/erase", { method: "POST", body: fd });
+        txt = await r.text();
+        if (!r.ok) {
+            flashSetStatus(t("flash.status.http") + " " + r.status + (txt ? ": " + txt : ""));
+            return;
+        }
+
+        try { j = JSON.parse(txt); } catch (e) {
+            flashSetStatus(t("flash.status.error") + " parse");
+            return;
+        }
+
+        if (!j || !j.ok) {
+            flashSetStatus(t("flash.status.error") + " " + (j && j.error ? j.error : ""));
+            return;
+        }
+
+        flashSetStatus(t("flash.status.done"));
+    } catch (e) {
+        flashSetStatus(t("flash.status.error") + " " + (e && e.message ? e.message : String(e)));
     }
 }
 

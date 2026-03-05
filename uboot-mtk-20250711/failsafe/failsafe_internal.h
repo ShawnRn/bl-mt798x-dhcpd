@@ -18,6 +18,10 @@
 
 size_t json_escape(char *dst, size_t dst_sz, const char *src);
 
+void picture_handler(enum httpd_uri_handler_status status,
+	struct httpd_request *request,
+	struct httpd_response *response);
+
 #ifdef CONFIG_WEBUI_FAILSAFE_CONSOLE
 int failsafe_webconsole_ensure_recording(void);
 void webconsole_poll_handler(enum httpd_uri_handler_status status,
@@ -45,6 +49,12 @@ void env_reset_handler(enum httpd_uri_handler_status status,
 	struct httpd_request *request,
 	struct httpd_response *response);
 void env_restore_handler(enum httpd_uri_handler_status status,
+	struct httpd_request *request,
+	struct httpd_response *response);
+void theme_get_handler(enum httpd_uri_handler_status status,
+	struct httpd_request *request,
+	struct httpd_response *response);
+void theme_set_handler(enum httpd_uri_handler_status status,
 	struct httpd_request *request,
 	struct httpd_response *response);
 #endif

@@ -5,6 +5,7 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>Flash Editor</title>
+	<script src="/themeloader.js"></script>
 	<link rel="stylesheet" href="/style.css">
 	<script src="/i18n.js"></script>
 	<script src="/main.js"></script>
@@ -23,6 +24,10 @@
 				</div>
 				<div class="card-main">
 					<div id="flash_info" class="backup-info"></div>
+					<div id="flash_status" class="flash-status" style="display: none;">
+						<div id="flash_spinner" class="spinner" style="display: none;"></div>
+						<div id="flash_status_text"></div>
+					</div>
 
 					<div class="backup-form">
 						<div class="form-row form-row-2">
@@ -50,6 +55,8 @@
 								data-i18n="flash.action.read">Read</button>
 							<button type="button" class="button" onclick="flashWrite()"
 								data-i18n="flash.action.write">Write</button>
+							<button type="button" class="button button-danger" onclick="flashErase()"
+								data-i18n="flash.action.erase">Erase</button>
 							<button type="button" class="button button-warn" onclick="flashFormatData()"
 								data-i18n="flash.action.format">Format</button>
 						</div>
@@ -101,11 +108,6 @@
 							<button type="button" class="button" onclick="flashRestore()"
 								data-i18n="flash.action.restore">Restore</button>
 						</div>
-					</div>
-
-					<div id="flash_status" class="flash-status" style="display: none;">
-						<div id="flash_spinner" class="spinner" style="display: none;"></div>
-						<div id="flash_status_text"></div>
 					</div>
 				</div>
 				<div class="card-foot">

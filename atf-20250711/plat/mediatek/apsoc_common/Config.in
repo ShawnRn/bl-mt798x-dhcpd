@@ -752,6 +752,100 @@ config _ENABLE_BL31_RUNTIME_LOG
 	default y if _ENABLE_FPGA
 	default n
 
+choice
+	prompt "MT7981 ARMPLL frequency (MHz)"
+	depends on _PLAT_MT7981
+	default MT7981_ARMPLL_FREQ_1300
+
+config MT7981_ARMPLL_FREQ_1300
+	bool "1300 MHz (default)"
+config MT7981_ARMPLL_FREQ_1400
+	bool "1400 MHz"
+config MT7981_ARMPLL_FREQ_1500
+	bool "1500 MHz"
+config MT7981_ARMPLL_FREQ_1600
+	bool "1600 MHz"
+config MT7981_ARMPLL_FREQ_1700
+	bool "1700 MHz"
+config MT7981_ARMPLL_FREQ_1800
+	bool "1800 MHz"
+
+endchoice
+
+# Makefile/C option bridge for MT7981 ARMPLL frequency selection.
+config MT7981_ARMPLL_FREQ_MHZ
+	int
+	depends on _PLAT_MT7981
+	default 1300 if MT7981_ARMPLL_FREQ_1300
+	default 1400 if MT7981_ARMPLL_FREQ_1400
+	default 1500 if MT7981_ARMPLL_FREQ_1500
+	default 1600 if MT7981_ARMPLL_FREQ_1600
+	default 1700 if MT7981_ARMPLL_FREQ_1700
+	default 1800 if MT7981_ARMPLL_FREQ_1800
+
+choice
+    prompt "MT7986 ARMPLL frequency (MHz)"
+    depends on _PLAT_MT7986
+	default MT7986_ARMPLL_FREQ_2000
+
+config MT7986_ARMPLL_FREQ_1600
+	bool "1600 MHz"
+config MT7986_ARMPLL_FREQ_1700
+	bool "1700 MHz"
+config MT7986_ARMPLL_FREQ_1800
+	bool "1800 MHz"
+config MT7986_ARMPLL_FREQ_1900
+	bool "1900 MHz"
+config MT7986_ARMPLL_FREQ_2000
+    bool "2000 MHz (default)"
+config MT7986_ARMPLL_FREQ_2100
+    bool "2100 MHz"
+config MT7986_ARMPLL_FREQ_2200
+    bool "2200 MHz"
+config MT7986_ARMPLL_FREQ_2300
+    bool "2300 MHz"
+config MT7986_ARMPLL_FREQ_2400
+    bool "2400 MHz"
+config MT7986_ARMPLL_FREQ_2500
+    bool "2500 MHz"
+
+endchoice
+
+# Makefile/C option bridge for MT7986 ARMPLL frequency selection.
+config MT7986_ARMPLL_FREQ_MHZ
+	int
+	depends on _PLAT_MT7986
+	default 1600 if MT7986_ARMPLL_FREQ_1600
+	default 1700 if MT7986_ARMPLL_FREQ_1700
+	default 1800 if MT7986_ARMPLL_FREQ_1800
+	default 1900 if MT7986_ARMPLL_FREQ_1900
+	default 2000 if MT7986_ARMPLL_FREQ_2000
+	default 2100 if MT7986_ARMPLL_FREQ_2100
+	default 2200 if MT7986_ARMPLL_FREQ_2200
+	default 2300 if MT7986_ARMPLL_FREQ_2300
+	default 2400 if MT7986_ARMPLL_FREQ_2400
+	default 2500 if MT7986_ARMPLL_FREQ_2500
+
+choice
+	prompt "MT7986 TRNG interface version"
+	depends on _PLAT_MT7986
+	default MT7986_TRNG_V1
+
+config MT7986_TRNG_V1
+	bool "v1 (default)"
+
+config MT7986_TRNG_V2
+	bool "v2 (For newer firmware)"
+
+endchoice
+
+# Makefile/C option bridge for MT7986 TRNG interface version selection.
+config MT7986_TRNG_VERSION
+	int
+	depends on _PLAT_MT7986
+	default 1 if MT7986_TRNG_V1
+	default 2 if MT7986_TRNG_V2
+
 # Makefile options
 config I2C_SUPPORT
 	int

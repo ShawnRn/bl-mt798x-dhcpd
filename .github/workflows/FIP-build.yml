@@ -52,12 +52,7 @@ on:
           - multi_layout
           - dis_fixed_mtdparts
       GEN_BL2:
-        description: 'Generate BL2 binary(v22/23 ATF only)'
-        required: false
-        default: false
-        type: boolean
-      OC_BL2:
-        description: 'Build 1.6GHz BL2 by patch(Only mt7981)'
+        description: 'Generate BL2 binary(v22/23 only)'
         required: false
         default: false
         type: boolean
@@ -74,6 +69,7 @@ on:
         description: 'Free up disk space(build environment)'
         required: false
         default: 'false'
+        type: boolean
       pub_release:
         description: 'Publish to GitHub Release'
         required: false
@@ -310,6 +306,7 @@ jobs:
             2024) echo "${{ env.atf24 }}" "${{ env.uboot23 }}" ;;
             2025) echo "${{ env.atf25 }}" "${{ env.uboot25 }}" ;;
             2026) echo "${{ env.atf26 }}" "${{ env.uboot26 }}" ;;
+            SP1) echo "${{ env.atf24 }}" "${{ env.uboot25 }}" ;;
             *) echo "" "" ;;
           esac
         }
@@ -472,14 +469,6 @@ jobs:
         echo "status=success" >> $GITHUB_OUTPUT
         echo "GEN_BL2=1" >> $GITHUB_ENV
 
-    - name: 应用 mt7981 BL2 超频补丁
-      if: github.event.inputs.OC_BL2 == 'true' && !cancelled()
-      run: |
-        cd bl-mt798x-dhcpd
-        git apply modify-patch/0001-overclocking-mt7981-to-1.6GHz-by-modify-atf.patch
-        echo "status=success" >> $GITHUB_OUTPUT
-        echo "OC_BL2=1" >> $GITHUB_ENV
-
     - name: 编译 FIP
       id: compile
       run: |
@@ -591,7 +580,7 @@ jobs:
             fi
 
             echo "正在编译${version}版本FIP（SOC：$soc，机型：$model_name）..."
-            BOARD="$model_name" VERSION=${version} VARIANT="$VARIANT" MULTI_LAYOUT="$MULTI_LAYOUT" FIXED_MTDPARTS="$FIXED_MTDPARTS" SLIENT=Y ./build.sh 2>&1 | tee "output/build-${soc}-${model_name}-${version}.log"
+            BOARD="$model_name" VERSION=${version} VARIANT="$VARIANT" MULTI_LAYOUT="$MULTI_LAYOUT" FIXED_MTDPARTS="$FIXED_MTDPARTS" SILENT=Y ./build.sh 2>&1 | tee "output/build-${soc}-${model_name}-${version}.log"
             build_rc=${PIPESTATUS[0]}
 
             if [ "$build_rc" -ne 0 ]; then
@@ -631,14 +620,6 @@ jobs:
         cd bl-mt798x-dhcpd
         # 获取当前时间戳
         TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
-        # 重命名 OC_BL2
-        if [ "${{ env.OC_BL2 }}" = "1" ]; then
-          for file in output/*; do
-            if [[ "$file" == *"mt7981"* && "$file" == *"bl2.bin"* ]]; then
-              mv "$file" "${file%.bin}_oc1.6GHz.bin"
-            fi
-          done
-        fi
         # 标注特殊网段（先追加 _customnet 后缀，再追加时间戳）
         if [ "${{ env.CUSTOM_NET }}" = "1" ]; then
           for dir in output output_gpt; do
@@ -699,7 +680,6 @@ jobs:
         echo "- 使用分支: ${{ env.REPO_BRANCH }}" >> release.txt
         echo "- 使用版本: ${{ github.event.inputs.FIP_VERSION }}" >> release.txt
 
-        echo "- 变体（仅2025/2026生效）: ${{ github.event.inputs.VARIANT }}" >> release.txt
         echo "- 额外选项: ${{ github.event.inputs.EXTRA_OPTION }}" >> release.txt
 
         if [ "${{ github.event.inputs.VARIANT }}" = "nonmbm" ]; then
@@ -718,18 +698,15 @@ jobs:
         if [ "${{ github.event.inputs.GEN_BL2 }}" = "true" ]; then
           echo "- 已开启 ATF22/23 BL2 生成" >> release.txt
         fi
-        if [ "${{ github.event.inputs.OC_BL2 }}" = "true" ]; then
-          echo "- 已应用 MT7981 1.6GHz BL2超频补丁" >> release.txt
-        fi
         CUSTOM_IP="${{ github.event.inputs.CUSTOM_IP }}"
         if [ "$CUSTOM_IP" != "false" ] && [ -n "$CUSTOM_IP" ]; then
           if echo "$CUSTOM_IP"; then
             echo "- 已应用特殊网段: $CUSTOM_IP" >> release.txt
           else
-            echo "- 特殊网段输入无效，已保持默认网段192.168.1.1" >> release.txt
+            echo "- 特殊网段输入无效，已保持默认网段" >> release.txt
           fi
         else
-          echo "- 保持默认网段192.168.1.1" >> release.txt
+          echo "- 保持默认网段" >> release.txt
         fi
         if [ "${{ github.event.inputs.MODEL }}" = "all" ]; then
           echo "- 已输出各版本机型列表文件（MODEL=all）" >> release.txt

@@ -1,0 +1,182 @@
+# SPDX-License-Identifier: GPL-2.0
+#
+# Copyright (C) 2026 Yuzhii0718
+#
+# All rights reserved.
+#
+# This file is part of the project bl-mt798x-dhcpd
+# You may not use, copy, modify or distribute this file except in compliance with the license agreement.
+#
+name: BL2 Build
+
+on:
+  repository_dispatch:
+  workflow_dispatch:
+    inputs:
+      REPO_URL:
+        description: 'Source repository'
+        required: true
+        default: 'https://github.com/Yuzhii0718/bl-mt798x-dhcpd'
+        type: string
+      REPO_BRANCH:
+        description: 'Repository branch'
+        required: true
+        default: 'master'
+        type: string
+      ATF_OC:
+        description: 'Include mt7981/mt7986 OC profiles'
+        required: false
+        default: false
+        type: boolean
+      pub_release:
+        description: 'Publish to GitHub Release'
+        required: false
+        default: 'true'
+        type: boolean
+
+env:
+  REPO_URL: ${{ github.event.inputs.REPO_URL }}
+  REPO_BRANCH: ${{ github.event.inputs.REPO_BRANCH }}
+  TZ: Asia/Shanghai
+  UPLOAD_ARTIFACT: true
+  UPLOAD_RELEASE: true
+
+jobs:
+  build-atf:
+    runs-on: ubuntu-22.04
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: 初始化编译环境
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo -E apt-get -qq update
+          sudo -E apt-get -qq install git rename tar
+          sudo timedatectl set-timezone "$TZ"
+          sudo mkdir -p /workdir
+          sudo chown $USER:$GROUPS /workdir
+
+          if [ "${{ github.event.inputs.pub_release }}" = "false" ]; then
+            echo "UPLOAD_RELEASE=false" >> $GITHUB_ENV
+          fi
+
+      - name: 下载源码
+        working-directory: /workdir
+        run: |
+          df -hT $PWD
+          git clone $REPO_URL -b $REPO_BRANCH bl-mt798x-dhcpd
+          ln -sf /workdir/bl-mt798x-dhcpd $GITHUB_WORKSPACE/bl-mt798x-dhcpd
+
+      - name: 安装 ATF 编译依赖
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -E apt-get -qq install $(cat bl-mt798x-dhcpd/depends/ubuntu-22.04)
+
+      - name: 准备 ATF 输入
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd bl-mt798x-dhcpd
+
+          if [ "${{ github.event.inputs.ATF_OC }}" = "true" ]; then
+            if [ -d "mt798x_atf/mt7981" ]; then
+              echo "启用mt7981 超频配置"
+              shopt -s dotglob nullglob
+              cp -af mt798x_atf/mt7981/* mt798x_atf/ || true
+            else
+              echo "Warning: 未找到 mt798x_atf/mt7981 目录，跳过"
+            fi
+            if [ -d "mt798x_atf/mt7986" ]; then
+              echo "启用mt7986 超频配置"
+              shopt -s dotglob nullglob
+              cp -af mt798x_atf/mt7986/* mt798x_atf/ || true
+            else
+              echo "Warning: 未找到 mt798x_atf/mt7986 目录，跳过"
+            fi
+          else
+            echo "未启用超频配置（ATF_OC=false）"
+          fi
+
+      - name: 编译 ATF
+        id: atf
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd bl-mt798x-dhcpd
+          chmod +x ./build.sh
+          chmod +x ./compile_atf.sh
+          ./compile_atf.sh
+          echo "FILE_DATE=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_ENV
+          echo "status=success" >> $GITHUB_OUTPUT
+
+      - name: 整理文件并重命名
+        id: organize
+        if: env.UPLOAD_ARTIFACT == 'true' && !cancelled()
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd bl-mt798x-dhcpd
+
+          TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
+
+          # 尝试给 output_bl2 文件打时间戳
+          if [ -d "output_bl2" ]; then
+            rename "s/(.*)\.(.*)/\$1_${TIMESTAMP}.\$2/" output_bl2/* || true
+          fi
+
+          mkdir -p upload
+          if [ -d "output_bl2" ]; then
+            cp -r output_bl2/* upload/ || true
+          fi
+
+          # 也把模板/源文件打包一份，便于追溯
+          if [ -d "mt798x_atf" ]; then
+            tar -czf upload/mt798x_atf_${TIMESTAMP}.tar.gz mt798x_atf || true
+          fi
+
+          echo "status=success" >> $GITHUB_OUTPUT
+
+      - name: 打包上传到Actions Artifacts
+        uses: actions/upload-artifact@main
+        if: steps.organize.outputs.status == 'success' && !cancelled()
+        with:
+          name: ${{ env.FILE_DATE }}-bl2-preloader
+          path: |
+            bl-mt798x-dhcpd/upload/*
+
+      - name: 生成Release说明
+        id: tag
+        if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+        shell: bash
+        run: |
+          set -euo pipefail
+          touch release.txt
+
+          echo "- 提交来源: ${{ github.sha }}" >> release.txt
+          echo "- 使用源码: ${{ env.REPO_URL }}" >> release.txt
+          echo "- 使用分支: ${{ env.REPO_BRANCH }}" >> release.txt
+          if [ "${{ github.event.inputs.ATF_OC }}" = "true" ]; then
+            echo "- 已启用: 编译超频配置" >> release.txt
+          else
+            echo "- 未启用: 编译超频配置" >> release.txt
+          fi
+          echo "- 编译时间: ${{ env.FILE_DATE }}" >> release.txt
+
+          echo "release_tag=${{ env.FILE_DATE }}-bl2-preloader" >> $GITHUB_OUTPUT
+          echo "status=success" >> $GITHUB_OUTPUT
+
+      - name: 发布至Release
+        uses: softprops/action-gh-release@v2.1.0
+        if: steps.tag.outputs.status == 'success' && !cancelled() && env.UPLOAD_RELEASE == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: bl-mt798x-dhcpd/upload/*
+          release_name: ${{ env.FILE_DATE }}-bl2-preloader
+          name: ${{ env.FILE_DATE }}-bl2-preloader
+          tag_name: ${{ steps.tag.outputs.release_tag }}
+          body_path: release.txt

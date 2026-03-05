@@ -981,6 +981,73 @@ static int flash_mtd_restore_range(struct mtd_info *mtd, u64 start,
 
 	return 0;
 }
+
+static int flash_mtd_erase_range(struct mtd_info *mtd, u64 start, u64 len)
+{
+	u64 block_start, block_end, blk;
+	size_t erase_sz;
+	u8 *blkbuf = NULL;
+	int ret = 0;
+
+	if (!mtd || !len)
+		return -EINVAL;
+
+	erase_sz = mtd->erasesize;
+	if (!erase_sz)
+		return -EINVAL;
+
+	block_start = start & ~((u64)erase_sz - 1);
+	block_end = (start + len + erase_sz - 1) & ~((u64)erase_sz - 1);
+
+	for (blk = block_start; blk < block_end; blk += erase_sz) {
+		u64 data_start = max(start, blk);
+		u64 data_end = min(start + (u64)len, blk + (u64)erase_sz);
+		bool full_block = (data_start == blk) && (data_end == blk + (u64)erase_sz);
+
+		if (full_block) {
+			ret = mtd_erase_skip_bad(mtd, blk, erase_sz, erase_sz,
+				NULL, NULL, mtd->name, true);
+			if (ret)
+				goto out;
+			continue;
+		}
+
+		if (!blkbuf) {
+			blkbuf = malloc(erase_sz);
+			if (!blkbuf) {
+				ret = -ENOMEM;
+				goto out;
+			}
+		}
+
+		{
+			size_t readsz = 0;
+			size_t fill_len = (size_t)(data_end - data_start);
+
+			ret = mtd_read_skip_bad(mtd, blk, erase_sz, erase_sz, &readsz, blkbuf);
+			if (ret || readsz != erase_sz) {
+				ret = ret ? ret : -EIO;
+				goto out;
+			}
+
+			memset(blkbuf + (size_t)(data_start - blk), 0xff, fill_len);
+
+			ret = mtd_erase_skip_bad(mtd, blk, erase_sz, erase_sz,
+				NULL, NULL, mtd->name, true);
+			if (ret)
+				goto out;
+
+			ret = mtd_write_skip_bad(mtd, blk, erase_sz, erase_sz,
+				NULL, blkbuf, true);
+			if (ret)
+				goto out;
+		}
+	}
+
+out:
+	free(blkbuf);
+	return ret;
+}
 #endif
 
 static const char *flash_find_last_before(const char *s, const char *needle,
@@ -1096,6 +1163,8 @@ static const char *flash_detect_op(struct httpd_request *request)
 		return "write";
 	if (!strcmp(uri, "/flash/restore"))
 		return "restore";
+	if (!strcmp(uri, "/flash/erase"))
+		return "erase";
 
 	return NULL;
 }
@@ -1406,6 +1475,90 @@ void flash_handler(enum httpd_uri_handler_status status,
 		if (!json)
 			goto oom;
 		snprintf(json, 96, "{\"ok\":true,\"restored\":%zu}\n", len);
+		flash_reply_json(response, 200, json, json);
+		return;
+	}
+
+	if (!strcmp(op, "erase")) {
+		struct httpd_form_value *storage, *target, *startv, *endv;
+		struct flash_target tgt;
+		u64 len;
+
+		storage = httpd_request_find_value(request, "storage");
+		target = httpd_request_find_value(request, "target");
+		startv = httpd_request_find_value(request, "start");
+		endv = httpd_request_find_value(request, "end");
+
+		if (storage && storage->data)
+			strlcpy(storage_sel, storage->data, sizeof(storage_sel));
+		if (target && target->data)
+			strlcpy(target_name, target->data, sizeof(target_name));
+
+		if (!target_name[0])
+			goto bad_req;
+
+		if (!strncmp(target_name, "mtd:", 4)) {
+			memmove(target_name, target_name + 4, strlen(target_name + 4) + 1);
+			strlcpy(storage_sel, "mtd", sizeof(storage_sel));
+		} else if (!strncmp(target_name, "mmc:", 4)) {
+			memmove(target_name, target_name + 4, strlen(target_name + 4) + 1);
+			strlcpy(storage_sel, "mmc", sizeof(storage_sel));
+		}
+
+		ret = flash_open_target(storage_sel, target_name, &tgt);
+		if (ret)
+			goto bad_target;
+
+		if (startv && endv && startv->data && startv->data[0] &&
+		    endv && endv->data && endv->data[0]) {
+			if (flash_parse_start_end(startv->data, endv->data, &start, &end)) {
+				flash_close_target(&tgt);
+				goto bad_range;
+			}
+		} else if ((!startv || !startv->data || !startv->data[0]) &&
+			   (!endv || !endv->data || !endv->data[0])) {
+			start = 0;
+			end = tgt.size;
+		} else {
+			flash_close_target(&tgt);
+			goto bad_range;
+		}
+
+		if (start >= end || end > tgt.size) {
+			flash_close_target(&tgt);
+			goto bad_range;
+		}
+
+		len = end - start;
+
+		if (tgt.src == BACKUP_SRC_MTD) {
+#ifdef CONFIG_MTD
+			ret = flash_mtd_erase_range(tgt.mtd, start, len);
+#else
+			ret = -ENODEV;
+#endif
+		} else {
+#ifdef CONFIG_MTK_BOOTMENU_MMC
+			ret = mmc_erase_generic(CONFIG_MTK_BOOTMENU_MMC_DEV_INDEX, 0,
+				tgt.base + start, len);
+#else
+			ret = -ENODEV;
+#endif
+		}
+
+		flash_close_target(&tgt);
+
+		if (ret)
+			goto io_err;
+
+		json = malloc(160);
+		if (!json)
+			goto oom;
+		snprintf(json, 160,
+			"{\"ok\":true,\"erased\":%llu,\"start\":\"0x%llx\",\"end\":\"0x%llx\"}\n",
+			(unsigned long long)len,
+			(unsigned long long)start,
+			(unsigned long long)end);
 		flash_reply_json(response, 200, json, json);
 		return;
 	}
