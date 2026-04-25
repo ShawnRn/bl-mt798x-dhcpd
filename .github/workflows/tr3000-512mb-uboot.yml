@@ -49,10 +49,20 @@ jobs:
         run: |
           git clone --depth=1 --single-branch --branch "$WRT_BRANCH" "$WRT_REPO" ./wrt/
 
+      - name: Apply TR3000 512MB reference files
+        run: |
+          cd ./wrt/
+          cp -f tr3000-512-reference/mt7981_cudy_tr3000-v1_multi_layout_defconfig \
+            ./uboot-mtk-20230718-09eda825/configs/
+          cp -f tr3000-512-reference/mt7981-cudy-tr3000-v1.dts \
+            ./uboot-mtk-20230718-09eda825/arch/arm/dts/
+          cp -f tr3000-512-reference/index.html \
+            ./uboot-mtk-20230718-09eda825/failsafe/fsdata/index.html
+
       - name: Build TR3000 512MB multi-layout FIP
         run: |
           cd ./wrt/
-          SOC=mt7981 BOARD=cudy_tr3000-v1 VERSION=2025 VARIANT=default MULTI_LAYOUT=1 SILENT=Y ./build.sh
+          SOC=mt7981 BOARD=cudy_tr3000-v1 VERSION=2023 VARIANT=default MULTI_LAYOUT=1 SILENT=Y ./build.sh
 
       - name: Package firmware
         run: |
@@ -74,12 +84,12 @@ jobs:
           Release: $RELEASE_TAG
           Source: $WRT_REPO
           Branch: $WRT_BRANCH
-          ATF: atf-20250711
-          MTK U-Boot: uboot-mtk-20250711
+          ATF: atf-20231013-0ea67d76a
+          MTK U-Boot: uboot-mtk-20230718-09eda825
           Device: Cudy TR3000 v1, 512MB flash, fixed-parts multi-layout
 
           This build follows the 512MB reference configuration from zhuannn/cudy-tr3000-512:
-          default variant + MULTI_LAYOUT=1 + nmbm0 fixed MTD layouts.
+          U-Boot 202307 + default variant + MULTI_LAYOUT=1 + nmbm0 fixed MTD layouts.
 
           Expected Linux layout for the target device:
           mtd5 ubi offset 0x5c0000, size 0x1ea00000.
