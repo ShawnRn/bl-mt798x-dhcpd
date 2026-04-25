@@ -1,4 +1,4 @@
-name: TR3000 512MB U-Boot
+name: TR3000 512MB Multi-Layout U-Boot
 
 on:
   workflow_dispatch:
@@ -49,10 +49,10 @@ jobs:
         run: |
           git clone --depth=1 --single-branch --branch "$WRT_BRANCH" "$WRT_REPO" ./wrt/
 
-      - name: Build TR3000 512MB ubootmod FIP
+      - name: Build TR3000 512MB multi-layout FIP
         run: |
           cd ./wrt/
-          SOC=mt7981 BOARD=cudy_tr3000-v1 VERSION=2025 VARIANT=ubootmod SILENT=Y ./build.sh
+          SOC=mt7981 BOARD=cudy_tr3000-v1 VERSION=2025 VARIANT=default MULTI_LAYOUT=1 SILENT=Y ./build.sh
 
       - name: Package firmware
         run: |
@@ -66,23 +66,26 @@ jobs:
         id: tag
         run: |
           BUILD_TIME=$(date +"%Y%m%d-%H%M")
-          RELEASE_TAG="TR3000-512M-Uboot-${BUILD_TIME}"
+          RELEASE_TAG="TR3000-512M-MultiLayout-Uboot-${BUILD_TIME}"
           echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           cat > release.txt << EOF
-          ## TR3000 512MB U-Boot / FIP
+          ## TR3000 512MB Multi-Layout U-Boot / FIP
 
           Release: $RELEASE_TAG
           Source: $WRT_REPO
           Branch: $WRT_BRANCH
           ATF: atf-20250711
           MTK U-Boot: uboot-mtk-20250711
-          Device: Cudy TR3000 v1, 512MB flash, ubootmod/FIT layout
+          Device: Cudy TR3000 v1, 512MB flash, fixed-parts multi-layout
 
-          The ubootmod configuration uses a dynamic UBI mtdpart, so the UBI partition consumes the remaining flash after:
-          1024k BL2, 512k u-boot-env, 2048k Factory, 256k bdinfo, and 2048k FIP.
+          This build follows the 512MB reference configuration from zhuannn/cudy-tr3000-512:
+          default variant + MULTI_LAYOUT=1 + nmbm0 fixed MTD layouts.
 
           Expected Linux layout for the target device:
-          mtd5 ubi offset 0x5c0000, size 0x1da40000.
+          mtd5 ubi offset 0x5c0000, size 0x1ea00000.
+
+          In U-Boot WebUI choose the layout:
+          mod-490m
           EOF
           echo "status=success" >> "$GITHUB_OUTPUT"
 
