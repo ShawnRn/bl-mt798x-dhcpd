@@ -438,6 +438,14 @@ static void reboot_handler(enum httpd_uri_handler_status status,
 		free(st);
 
 		if (do_reboot) {
+			/*
+			 * A normal reboot from the WebUI must not preserve a previous
+			 * one-shot failsafe request. Otherwise the device can reboot
+			 * straight back into the U-Boot WebUI.
+			 */
+			env_set("failsafe", NULL);
+			env_save();
+
 			/* Make sure the current HTTP session has fully closed before reset */
 			mtk_tcp_close_all_conn();
 			do_reset(NULL, 0, 0, NULL);
