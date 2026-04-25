@@ -385,7 +385,7 @@ function updateDocumentTitle() {
 function ensureBranding() {
     var t = document.getElementById("version"),
         n, i;
-    t && ((n = t.nextElementSibling, n && n.classList && n.classList.contains("brand") && n.parentNode && n.parentNode.removeChild(n), t.querySelector && t.querySelector(".brand-inline")) || (i = document.createElement("span"), i.className = "brand-inline", i.textContent = "💡Yuzhii", t.appendChild(document.createTextNode(" ")), t.appendChild(i)))
+    t && ((n = t.nextElementSibling, n && n.classList && n.classList.contains("brand") && n.parentNode && n.parentNode.removeChild(n), t.querySelector && t.querySelector(".brand-inline")) || (i = document.createElement("span"), i.className = "brand-inline", i.textContent = "Shawn Rain", t.appendChild(document.createTextNode(" ")), t.appendChild(i)))
     if (!t) return;
     if (t.querySelector && t.querySelector("#project-info")) return;
     var m = document.createElement("div");
