@@ -1,0 +1,104 @@
+name: TR3000 512MB U-Boot
+
+on:
+  workflow_dispatch:
+    inputs:
+      prerelease:
+        description: 'Publish as a pre-release'
+        required: false
+        type: boolean
+        default: true
+      branch:
+        description: 'Source branch for bl-mt798x-dhcpd'
+        required: false
+        type: string
+        default: 'master'
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  WRT_REPO: https://github.com/ShawnRn/bl-mt798x-dhcpd
+  WRT_BRANCH: ${{ github.event.inputs.branch }}
+  PRERELEASE: ${{ github.event.inputs.prerelease }}
+
+permissions: write-all
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout workflow repo
+        uses: actions/checkout@v4
+
+      - name: Initialize environment
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo -E apt -yqq purge firefox || true
+          sudo -E apt -yqq update
+          sudo -E apt -yqq full-upgrade
+          sudo -E apt -yqq autoremove --purge
+          sudo -E apt -yqq autoclean
+          sudo -E apt -yqq clean
+          sudo -E apt -yqq install dos2unix bison build-essential device-tree-compiler flex gcc-aarch64-linux-gnu libssl-dev qemu-user-static
+          sudo -E timedatectl set-timezone "Asia/Shanghai"
+          sudo mkdir -p /mnt/build_wrt
+          sudo chown "$USER:$USER" /mnt/build_wrt
+          sudo ln -s /mnt/build_wrt "$GITHUB_WORKSPACE/wrt"
+
+      - name: Clone source
+        run: |
+          git clone --depth=1 --single-branch --branch "$WRT_BRANCH" "$WRT_REPO" ./wrt/
+
+      - name: Build TR3000 512MB ubootmod FIP
+        run: |
+          cd ./wrt/
+          SOC=mt7981 BOARD=cudy_tr3000-v1 VERSION=2025 VARIANT=ubootmod SILENT=Y ./build.sh
+
+      - name: Package firmware
+        run: |
+          cd ./wrt/
+          mkdir -p ./upload/
+          WRT_DATE=$(TZ=UTC-8 date +"%y.%m.%d")
+          echo "WRT_DATE=$WRT_DATE" >> "$GITHUB_ENV"
+          find ./output/ -type f -iname "*fip*.bin" -print -exec cp {} ./upload/ \;
+
+      - name: Generate release tag
+        id: tag
+        run: |
+          BUILD_TIME=$(date +"%Y%m%d-%H%M")
+          RELEASE_TAG="TR3000-512M-Uboot-${BUILD_TIME}"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          cat > release.txt << EOF
+          ## TR3000 512MB U-Boot / FIP
+
+          Release: $RELEASE_TAG
+          Source: $WRT_REPO
+          Branch: $WRT_BRANCH
+          ATF: atf-20250711
+          MTK U-Boot: uboot-mtk-20250711
+          Device: Cudy TR3000 v1, 512MB flash, ubootmod/FIT layout
+
+          The ubootmod configuration uses a dynamic UBI mtdpart, so the UBI partition consumes the remaining flash after:
+          1024k BL2, 512k u-boot-env, 2048k Factory, 256k bdinfo, and 2048k FIP.
+
+          Expected Linux layout for the target device:
+          mtd5 ubi offset 0x5c0000, size 0x1da40000.
+          EOF
+          echo "status=success" >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TR3000_512M_Uboot_FIP_${{ env.WRT_DATE }}
+          path: ./wrt/upload/*.bin
+
+      - name: Upload firmware to release
+        uses: softprops/action-gh-release@v2
+        if: steps.tag.outputs.status == 'success' && !cancelled()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.tag.outputs.release_tag }}
+          body_path: release.txt
+          prerelease: ${{ env.PRERELEASE == 'true' }}
+          files: ./wrt/upload/*.bin
