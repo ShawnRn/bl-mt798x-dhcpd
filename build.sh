@@ -1,6 +1,6 @@
 #!/bin/sh
 
-AUTHOR="Yuzhii"
+AUTHOR="ShawnRain"
 
 TOOLCHAIN=aarch64-linux-gnu-
 

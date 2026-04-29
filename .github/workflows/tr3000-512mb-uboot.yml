@@ -78,7 +78,7 @@ jobs:
           MTK U-Boot: uboot-mtk-20250711
           Device: Cudy TR3000 v1, 512MB flash, fixed-parts multi-layout
 
-          This build keeps the Yuzhii/weekdaycare beautiful WebUI and follows the 512MB reference layout from zhuannn/cudy-tr3000-512:
+          This build keeps the DHCPD/WebUI feature set and follows the ShawnWrt 512MB TR3000 layout strategy:
           default variant + MULTI_LAYOUT=1 + nmbm0 fixed MTD layouts.
 
           Expected Linux layout for the target device:

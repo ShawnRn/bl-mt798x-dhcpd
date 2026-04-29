@@ -130,7 +130,7 @@ else
             built_base=$(basename -- "$built_out_file_raw")
             built_name_no_extension="${built_base%.*}"
             built_extension="${built_base##*.}"
-            built_out_file="$output_folder/${built_name_no_extension}-Yuzhii_md5-${gpt_md5}.${built_extension}"
+            built_out_file="$output_folder/${built_name_no_extension}-ShawnRain_md5-${gpt_md5}.${built_extension}"
             mv -f "$built_out_file_raw" "$built_out_file"
             echo "Built: $built_out_file"
             built_count=$((built_count + 1))

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0
 #
-# Copyright (C) 2026 Yuzhii0718
+# Copyright (C) 2026 Shawn Rain
 #
 # All rights reserved.
 #
@@ -16,7 +16,7 @@ on:
       REPO_URL:
         description: 'Source repository'
         required: true
-        default: 'https://github.com/Yuzhii0718/bl-mt798x-dhcpd'
+        default: 'https://github.com/ShawnRn/bl-mt798x-dhcpd'
         type: string
       REPO_BRANCH:
         description: 'Repository branch'

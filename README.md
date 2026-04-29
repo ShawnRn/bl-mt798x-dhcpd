@@ -1,10 +1,22 @@
-# ATF and u-boot for mt798x with DHCPD
+# ShawnWrt U-Boot Builder
 
-A modified version of hanwckf's U-Boot for MT798x by Yuzhii, with support for DHCPD and a beautiful web UI. (Builds available for versions 2022/2023/2024/2025)
+ShawnWrt U-Boot Builder is maintained by **Shawn Rain** for MT798x recovery and bootloader builds used together with ShawnWrt firmware.
+
+It is based on hanwckf's MT798x U-Boot work and Yuzhii's DHCPD/WebUI modifications, with ShawnWrt-specific workflows and release naming. Builds are available for versions 2022/2023/2024/2025/2026 where supported.
 
 Supports GitHub Actions for automatic builds, and can generate both normal and overclocked BL2.
 
-**Warnign: Flashing custom bootloaders can brick your device. Proceed with caution and at your own risk.**
+**Warning: flashing custom bootloaders can brick your device. Proceed with caution and at your own risk.**
+
+## ShawnWrt Integration
+
+This repository is the U-Boot source used by the ShawnWrt firmware builder:
+
+<https://github.com/ShawnRn/immortalwrt-mt7981-cudy-tr3000>
+
+The integrated firmware builder invokes this repo for U-Boot/FIP release builds, so firmware and bootloader release notes share the same ShawnWrt/Shawn Rain branding.
+
+For the Cudy TR3000 512MB unit, keep the selected U-Boot layout and the firmware partition expectations aligned. Mixing unrelated FIP layouts and sysupgrade images is the main brick risk.
 
 ## About bl-mt798x
 
