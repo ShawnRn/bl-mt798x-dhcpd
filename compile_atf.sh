@@ -80,7 +80,7 @@ for cfg_file in $CONFIG_LIST; do
     if [ "$build_ok" = "1" ] && [ -f "$ATF_DIR/build/${soc}/release/bl2.img" ]; then
         src_file="$ATF_DIR/build/${soc}/release/bl2.img"
         bl2_md5=$(md5sum "$src_file" | awk '{print $1}')
-        out_name="bl2-${cfg_base}-Yuzhii_md5-${bl2_md5}.img"
+        out_name="bl2-${cfg_base}-ShawnRain_md5-${bl2_md5}.img"
         cp -f "$src_file" "$OUTPUT_DIR/$out_name"
         echo "$out_name build done"
         echo "----------------------------------------"
@@ -88,7 +88,7 @@ for cfg_file in $CONFIG_LIST; do
     elif [ "$build_ok" = "1" ] && [ -f "$ATF_DIR/build/${soc}/release/bl2.bin" ]; then
         src_file="$ATF_DIR/build/${soc}/release/bl2.bin"
         bl2_md5=$(md5sum "$src_file" | awk '{print $1}')
-        out_name="bl2-${cfg_base}-Yuzhii_md5-${bl2_md5}.bin"
+        out_name="bl2-${cfg_base}-ShawnRain_md5-${bl2_md5}.bin"
         cp -f "$src_file" "$OUTPUT_DIR/$out_name"
         echo "Warning: bl2.img not found, fallback to bl2.bin"
         echo "$out_name build done"

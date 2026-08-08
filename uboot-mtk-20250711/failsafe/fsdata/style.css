@@ -33,6 +33,10 @@
     --sidebar-w: 260px;
     --anim: 220ms cubic-bezier(.2, .8, .2, 1);
     --theme-anim: 700ms cubic-bezier(.22, .61, .36, 1);
+
+    --console-bg: #f8fafc;
+    --console-text: #0f172a;
+    --console-border: rgba(2, 6, 23, 0.12);
 }
 
 html.theme-transition,
@@ -59,6 +63,10 @@ html.theme-transition * {
         --warn-border: rgba(245, 158, 11, 0.35);
         --err-bg: rgba(248, 113, 113, 0.10);
         --err-border: rgba(248, 113, 113, 0.35);
+
+        --console-bg: #090d16;
+        --console-text: #f1f5f9;
+        --console-border: rgba(148, 163, 184, 0.22);
     }
 }
 
@@ -841,31 +849,20 @@ ul {
 }
 
 .console-output {
-    height: 300px;
+    height: 320px;
     overflow: auto;
     white-space: pre-wrap;
     word-break: break-word;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     font-size: 12px;
     line-height: 1.45;
-    background: rgba(17, 24, 39, .92);
-    color: #e5e7eb;
-    border: 1px solid rgba(148, 163, 184, .22);
+    background: var(--console-bg);
+    color: var(--console-text);
+    border: 1px solid var(--console-border);
     border-radius: 12px;
     padding: 12px;
     box-sizing: border-box;
-}
-
-:root[data-theme="dark"] .console-output {
-    background: rgba(2, 6, 23, .86);
-    border-color: rgba(148, 163, 184, .22);
-}
-
-@media (prefers-color-scheme:dark) {
-    :root:not([data-theme]) .console-output {
-        background: rgba(2, 6, 23, .86);
-        border-color: rgba(148, 163, 184, .22);
-    }
+    transition: background-color var(--anim), color var(--anim), border-color var(--anim);
 }
 
 .console-toolbar {

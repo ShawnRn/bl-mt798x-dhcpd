@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2026 Yuzhii0718
+ * Copyright (C) 2026 ShawnRain
  *
  * All rights reserved.
  *

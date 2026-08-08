@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2026 Yuzhii0718
+ * Copyright (C) 2026 Shawn Rain
  *
  * All rights reserved.
  *
@@ -390,7 +390,7 @@ function ensureBranding() {
     if (t.querySelector && t.querySelector("#project-info")) return;
     var m = document.createElement("div");
     m.id = "project-info";
-    m.innerHTML = 'You can find more infomation about this project: <a href="https://github.com/Yuzhii0718/bl-mt798x-dhcpd" target="_blank">Github</a>';
+    m.innerHTML = 'You can find more infomation about this project: <a href="https://github.com/ShawnRn/bl-mt798x-dhcpd" target="_blank">Github</a>';
     t.appendChild(m);
 }
 
@@ -732,36 +732,47 @@ function envInit() {
 }
 
 function appInit(n) {
-    APP_STATE.page = n || "";
-    APP_STATE.i18nEnabled = isI18nAvailable();
-    APP_STATE.lang = detectLang();
-    APP_STATE.theme = detectTheme();
-    setTheme(APP_STATE.theme, { persistEnv: false, persistLocal: true });
-    setLang(APP_STATE.lang);
-    ensureSidebar();
-    ensureBranding();
-    ensureFavicon();
-    applyI18n(document);
-    updateDocumentTitle();
-    loadThemeColor();
-    loadThemeMode();
-    setTimeout(function () {
-        document.body.classList.add("ready")
-    }, 0);
-    getversion();
-    // Fetch system info and storage/partition info for display
-    getSysInfo();
-    getStorageInfoForSysinfo();
-    // getCurrentMtdLayout();
-    (n === "index" || n === "initramfs") && getmtdlayoutlist();
-    n === "backup" && backupInit();
-    n === "flash" && flashInit();
-    n === "console" && consoleInit();
-    n === "env" && envInit()
+    try {
+        APP_STATE.page = n || "";
+        APP_STATE.i18nEnabled = isI18nAvailable();
+        APP_STATE.lang = detectLang();
+        APP_STATE.theme = detectTheme();
+        setTheme(APP_STATE.theme, { persistEnv: false, persistLocal: true });
+        setLang(APP_STATE.lang);
+        ensureSidebar();
+        ensureBranding();
+        ensureFavicon();
+        applyI18n(document);
+        updateDocumentTitle();
+        try { loadThemeColor(); } catch (e) {}
+        try { loadThemeMode(); } catch (e) {}
+        getversion();
+        // Fetch system info and storage/partition info for display
+        getSysInfo();
+        getStorageInfoForSysinfo();
+        // getCurrentMtdLayout();
+        (n === "index" || n === "initramfs") && getmtdlayoutlist();
+        n === "backup" && backupInit();
+        n === "flash" && flashInit();
+        n === "console" && consoleInit();
+        n === "env" && envInit();
+    } catch (err) {
+        console && console.error && console.error("appInit error:", err);
+    } finally {
+        setTimeout(function () {
+            if (document.body) {
+                document.body.classList.add("ready");
+            }
+            var mElem = document.getElementById("m");
+            if (mElem) {
+                mElem.style.opacity = "1";
+            }
+        }, 0);
+    }
 
-    const Yuzhii_VERSION = 'UBOOT-MTK-20250711';
-    const Yuzhii_LINK = 'https://github.com/Yuzhii0718/';
-    console.log('\n%c Yuzhii0718 ' + Yuzhii_VERSION + ' %c ' + Yuzhii_LINK + ' ', 'color: #fadfa3; background: #030307; padding:5px 0;', 'background: #fadfa3; padding:5px 0;');
+    const SHAWN_VERSION = 'UBOOT-MTK-20250711';
+    const SHAWN_LINK = 'https://github.com/ShawnRn/bl-mt798x-dhcpd';
+    console.log('\n%c Shawn Rain ' + SHAWN_VERSION + ' %c ' + SHAWN_LINK + ' ', 'color: #fadfa3; background: #030307; padding:5px 0;', 'background: #fadfa3; padding:5px 0;');
 }
 
 function updateGptNavVisibility() {

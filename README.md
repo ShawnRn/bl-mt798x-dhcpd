@@ -2,7 +2,7 @@
 
 ShawnWrt U-Boot Builder is maintained by **Shawn Rain** for MT798x recovery and bootloader builds used together with ShawnWrt firmware.
 
-It is based on hanwckf's MT798x U-Boot work and Yuzhii's DHCPD/WebUI modifications, with ShawnWrt-specific workflows and release naming. Builds are available for versions 2022/2023/2024/2025/2026 where supported.
+It is based on hanwckf's MT798x U-Boot work and Shawn Rain's DHCPD/WebUI modifications, with ShawnWrt-specific workflows and release naming. Builds are available for versions 2022/2023/2024/2025/2026 where supported.
 
 Supports GitHub Actions for automatic builds, and can generate both normal and overclocked BL2.
 
