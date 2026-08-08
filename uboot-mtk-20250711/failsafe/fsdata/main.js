@@ -411,18 +411,38 @@ function ensureSidebar() {
 
 function ajax(n) {
     var t, i;
-    t = window.XMLHttpRequest ? new XMLHttpRequest : new ActiveXObject("Microsoft.XMLHTTP");
-    t.upload.addEventListener("progress", function (t) {
-        n.progress && n.progress(t)
-    });
-    t.onreadystatechange = function () {
-        t.readyState == 4 && t.status == 200 && n.done && n.done(t.responseText)
-    };
-    n.timeout && (t.timeout = n.timeout);
-    i = "GET";
-    n.data && (i = "POST");
-    t.open(i, n.url);
-    t.send(n.data)
+    try {
+        t = window.XMLHttpRequest ? new XMLHttpRequest : new ActiveXObject("Microsoft.XMLHTTP");
+        if (t.upload && n.progress) {
+            t.upload.addEventListener("progress", function (e) {
+                n.progress && n.progress(e);
+            });
+        }
+        t.onreadystatechange = function () {
+            if (t.readyState == 4) {
+                if (t.status == 200) {
+                    n.done && n.done(t.responseText);
+                } else if (n.error) {
+                    n.error(t.status, t.responseText);
+                }
+            }
+        };
+        if (n.timeout) {
+            t.timeout = n.timeout;
+            t.ontimeout = function () {
+                n.error && n.error(0, "timeout");
+            };
+        }
+        t.onerror = function () {
+            n.error && n.error(0, "error");
+        };
+        i = "GET";
+        n.data && (i = "POST");
+        t.open(i, n.url);
+        t.send(n.data);
+    } catch (e) {
+        n.error && n.error(0, e);
+    }
 }
 
 function consoleInit() {

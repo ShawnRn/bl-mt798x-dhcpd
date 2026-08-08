@@ -242,7 +242,7 @@ var I18N = {
         "404.msg": "The page you were looking for doesn't exist!"
     },
     "zh-cn": {
-        "app.name": "恢复模式 WEBUI",
+        "app.name": "恢复模式 - ShawnWrt",
         "nav.basic": "基础功能",
         "nav.advanced": "高级功能",
         "nav.firmware": "固件升级",

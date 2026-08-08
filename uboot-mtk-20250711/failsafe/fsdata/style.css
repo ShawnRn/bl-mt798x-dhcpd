@@ -340,9 +340,7 @@ body {
     display: flex;
     flex-direction: column;
     min-height: clamp(360px, calc(100vh - 220px), 440px);
-    transform: translateY(8px);
-    opacity: 0;
-    transition: transform var(--anim), opacity var(--anim);
+    transition: background-color var(--anim), border-color var(--anim);
 }
 
 body.ready #m {
